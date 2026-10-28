@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type {
-  FriendLink,
+  AdminFriendLink,
   FriendLinkCategory,
   FriendLinkCreate,
-  FriendLinkPatch
+  FriendLinkPatch,
+  FriendLinkState
 } from '#shared/utils/api/schemas'
 import {
   FRIEND_LINK_CATEGORY_OPTIONS,
@@ -13,7 +14,7 @@ import type { FriendLinkSubmit } from './type'
 
 const props = defineProps<{
   modelValue: boolean
-  initialData?: FriendLink | null
+  initialData?: AdminFriendLink | null
   defaultCategory?: FriendLinkCategory
 }>()
 
@@ -27,14 +28,18 @@ const isOpen = computed({
   set: (v) => emits('update:modelValue', v)
 })
 const isEditing = computed(() => !!props.initialData?.id)
+const isAbnormal = computed(() => props.initialData?.state === 'abnormal')
 
 type FriendLinkForm = Required<
   Omit<FriendLinkCreate, 'banner_image_hash' | 'description' | 'state'>
 > & {
   description: string
   banner_image_hash: string
-  state: NonNullable<FriendLinkCreate['state']>
+  state: FriendLinkState
 }
+
+const normalizeState = (state?: AdminFriendLink['state']): FriendLinkState =>
+  state === 'down' ? 'down' : 'normal'
 
 const getInitial = (): FriendLinkForm => {
   const d = props.initialData
@@ -45,7 +50,7 @@ const getInitial = (): FriendLinkForm => {
     url: d?.url ?? '',
     description: d?.description ?? '',
     banner_image_hash: d?.banner?.hash ?? '',
-    state: d?.state ?? 'normal'
+    state: normalizeState(d?.state)
   }
 }
 
@@ -66,6 +71,11 @@ const changedFields = (): FriendLinkPatch => {
     if (form[key] !== initial[key]) {
       Object.assign(patch, { [key]: form[key] })
     }
+  }
+  // abnormal is not a selectable value: saving an abnormal row while the form
+  // shows normal is the rescue action, so the state patch must be explicit.
+  if (isAbnormal.value && form.state !== props.initialData?.state) {
+    patch.state = form.state
   }
   return patch
 }
@@ -102,6 +112,16 @@ const handleSubmit = () => {
       <h2 class="mb-4 text-xl font-bold">
         {{ isEditing ? '编辑友链' : '添加友链' }}
       </h2>
+
+      <div
+        v-if="isAbnormal"
+        class="bg-warning-50 text-warning-700 mb-4 flex items-start gap-2 rounded-lg p-3 text-sm"
+      >
+        <KunIcon name="lucide:triangle-alert" class="mt-0.5 size-4 shrink-0" />
+        <span>
+          该站点已被健康检查连续 3 次判定为打不开并从公开页收起。保存时状态保持「正常」即立即放回公开页；改为「已下线」则保留为手动下线。
+        </span>
+      </div>
 
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <KunInput v-model="form.title" label="名称" required />

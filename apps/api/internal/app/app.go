@@ -13,6 +13,8 @@ import (
 	"kun-galgame-api/internal/community/anchor"
 	communitynotify "kun-galgame-api/internal/community/notify"
 	communitytrust "kun-galgame-api/internal/community/trust"
+	"kun-galgame-api/internal/friendlink/healthcheck"
+	"kun-galgame-api/internal/friendlink/siteprobe"
 	galgameapiv1 "kun-galgame-api/internal/galgame/apiv1"
 	calendarapiv1 "kun-galgame-api/internal/galgame/calendarapiv1"
 	"kun-galgame-api/internal/galgame/client"
@@ -569,6 +571,7 @@ func New(cfg *config.Config) *App {
 			StickerPackRefresh:         stickerPackRefresh,
 			NotificationRetention:      expireReadNotifications(messageRepository, cfg.Notification.RetentionDays),
 			TopicAISweep:               topicAI.Sweep,
+			FriendLinkCheck:            healthcheck.NewJob(db, rdb, siteprobe.NewHTTP(0)),
 		}),
 		StoreLinkStop:       storeLinks.Start(),
 		CommunityNotifyStop: communitynotify.New(communityCli, messageRepository, anchorResolver, rdb).Start(),

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { settle } from '#shared/utils/api/problem'
-import type { FriendLink, FriendLinkCategory } from '#shared/utils/api/schemas'
+import type {
+  AdminFriendLink,
+  FriendLinkCategory
+} from '#shared/utils/api/schemas'
 import type { FriendLinkSubmit } from '~/components/admin/friend-link/type'
 import { FRIEND_LINK_CATEGORIES } from '~/constants/friendLink'
 
@@ -12,13 +15,13 @@ definePageMeta({
 useKunDisableSeo('友链管理')
 
 const api = useApiClient()
-const { links, pending, refresh } = useFriendLinks()
+const { links, pending, refresh } = useAdminFriendLinks()
 
 const shelf = (category: FriendLinkCategory) =>
   links.value.filter((link) => link.friend_link_category === category)
 
 const isModalOpen = ref(false)
-const editing = ref<FriendLink | null>(null)
+const editing = ref<AdminFriendLink | null>(null)
 const modalCategory = ref<FriendLinkCategory>('galgame')
 
 const openAdd = (category: FriendLinkCategory) => {
@@ -27,7 +30,7 @@ const openAdd = (category: FriendLinkCategory) => {
   isModalOpen.value = true
 }
 
-const openEdit = (link: FriendLink) => {
+const openEdit = (link: AdminFriendLink) => {
   editing.value = link
   isModalOpen.value = true
 }
@@ -49,7 +52,7 @@ const handleSubmit = async (submit: FriendLinkSubmit) => {
   await refresh()
 }
 
-const handleRemove = async (link: FriendLink) => {
+const handleRemove = async (link: AdminFriendLink) => {
   const confirmed = await useComponentMessageStore().alert(
     `确定删除友链「${link.title}」吗？`
   )

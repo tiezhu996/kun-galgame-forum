@@ -36,6 +36,19 @@ func Register(s *Service) func(huma.API) {
 		}), s.listFriendLinks)
 
 		huma.Register(api, v1.Required(huma.Operation{
+			OperationID: "listAdminFriendLinks",
+			Method:      http.MethodGet,
+			Path:        "/admin/friend-links",
+			Summary:     "List every friend link for staff",
+			Description: "Every friend link including checker-hidden abnormal ones, with last check time and failure reason. " +
+				"It needs the friend_link.edit permission, which a Bearer request never carries.",
+			Tags: []string{"friend-links"},
+			Responses: problemResponses(map[int]string{
+				403: "PERMISSION_REQUIRED when the caller lacks friend_link.edit.",
+			}),
+		}), s.listAdminFriendLinks)
+
+		huma.Register(api, v1.Required(huma.Operation{
 			OperationID: "getFriendLink",
 			Method:      http.MethodGet,
 			Path:        "/admin/friend-links/{friend_link_id}",

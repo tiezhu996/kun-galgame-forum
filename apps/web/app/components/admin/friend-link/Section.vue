@@ -1,22 +1,25 @@
 <script setup lang="ts">
 import { useSortable, moveArrayElement } from '@vueuse/integrations/useSortable'
-import type { FriendLink, FriendLinkCategory } from '#shared/utils/api/schemas'
-import { FRIEND_LINK_STATE_CHIP } from '~/constants/friendLink'
+import type {
+  AdminFriendLink,
+  FriendLinkCategory
+} from '#shared/utils/api/schemas'
+import { FRIEND_LINK_ADMIN_STATE_CHIP } from '~/constants/friendLink'
 
 const props = defineProps<{
   category: FriendLinkCategory
   label: string
-  links: FriendLink[]
+  links: AdminFriendLink[]
 }>()
 
 const emits = defineEmits<{
   add: [category: FriendLinkCategory]
-  edit: [link: FriendLink]
-  remove: [link: FriendLink]
+  edit: [link: AdminFriendLink]
+  remove: [link: AdminFriendLink]
   reorder: [category: FriendLinkCategory, ids: string[]]
 }>()
 
-const items = ref<FriendLink[]>([...props.links])
+const items = ref<AdminFriendLink[]>([...props.links])
 watch(
   () => props.links,
   (value) => {
@@ -77,10 +80,11 @@ useSortable(listEl, items, {
             <div class="flex items-center gap-2">
               <span class="truncate font-medium">{{ friend.title }}</span>
               <KunChip
-                v-if="FRIEND_LINK_STATE_CHIP[friend.state]"
-                :color="FRIEND_LINK_STATE_CHIP[friend.state]!.color"
+                v-if="FRIEND_LINK_ADMIN_STATE_CHIP[friend.state]"
+                :color="FRIEND_LINK_ADMIN_STATE_CHIP[friend.state]!.color"
+                size="sm"
               >
-                {{ FRIEND_LINK_STATE_CHIP[friend.state]!.label }}
+                {{ FRIEND_LINK_ADMIN_STATE_CHIP[friend.state]!.label }}
               </KunChip>
             </div>
             <a
@@ -91,6 +95,24 @@ useSortable(listEl, items, {
             >
               {{ friend.url }}
             </a>
+            <div
+              v-if="friend.last_checked_at || friend.last_fail_reason"
+              class="text-default-400 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs"
+            >
+              <span v-if="friend.last_checked_at" class="inline-flex items-center gap-1">
+                <KunIcon name="lucide:clock" class="size-3" />
+                <span>上次检查</span>
+                <KunTime :time="friend.last_checked_at" type="auto" />
+              </span>
+              <span
+                v-if="friend.last_fail_reason"
+                class="text-danger inline-flex min-w-0 items-center gap-1"
+                :title="friend.last_fail_reason"
+              >
+                <KunIcon name="lucide:triangle-alert" class="size-3 shrink-0" />
+                <span class="truncate">{{ friend.last_fail_reason }}</span>
+              </span>
+            </div>
           </div>
           <KunButton
             size="sm"

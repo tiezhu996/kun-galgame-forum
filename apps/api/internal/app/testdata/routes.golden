@@ -55,6 +55,7 @@ GET    /api/v1/account-prices                         cors.New → v1Headers →
 GET    /api/v1/activities                             cors.New → v1Headers → fiberAdapter.Handle
 GET    /api/v1/activity-groups/:group_id/items        cors.New → v1Headers → fiberAdapter.Handle
 GET    /api/v1/admin/docs/:doc_id                     cors.New → v1Headers → fiberAdapter.Handle
+GET    /api/v1/admin/friend-links                     cors.New → v1Headers → fiberAdapter.Handle
 GET    /api/v1/admin/friend-links/:friend_link_id     cors.New → v1Headers → fiberAdapter.Handle
 GET    /api/v1/admin/hidden-topics                    cors.New → v1Headers → fiberAdapter.Handle
 GET    /api/v1/admin/overview                         cors.New → v1Headers → fiberAdapter.Handle

@@ -3,6 +3,7 @@ package repository
 import (
 	"errors"
 	"slices"
+	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -14,18 +15,23 @@ var Categories = []string{"official", "galgame", "others"}
 const categoryRank = "array_position(ARRAY['official','galgame','others']::text[], category::text)"
 
 type LinkRow struct {
-	ID              int    `gorm:"column:id"`
-	Category        string `gorm:"column:category"`
-	Rank            int    `gorm:"column:rank"`
-	Name            string `gorm:"column:name"`
-	Link            string `gorm:"column:link"`
-	Description     string `gorm:"column:description"`
-	BannerImageHash string `gorm:"column:banner_image_hash"`
-	Status          string `gorm:"column:status"`
-	SortOrder       int    `gorm:"column:sort_order"`
+	ID                 int        `gorm:"column:id"`
+	Category           string     `gorm:"column:category"`
+	Rank               int        `gorm:"column:rank"`
+	Name               string     `gorm:"column:name"`
+	Link               string     `gorm:"column:link"`
+	Description        string     `gorm:"column:description"`
+	BannerImageHash    string     `gorm:"column:banner_image_hash"`
+	Status             string     `gorm:"column:status"`
+	SortOrder          int        `gorm:"column:sort_order"`
+	HealthFailCount    int        `gorm:"column:health_fail_count"`
+	HealthSuccessCount int        `gorm:"column:health_success_count"`
+	LastCheckedAt      *time.Time `gorm:"column:last_checked_at"`
+	LastFailReason     string     `gorm:"column:last_fail_reason"`
 }
 
-const linkColumns = "id, category, " + categoryRank + " AS rank, name, link, description, banner_image_hash, status, sort_order"
+const linkColumns = "id, category, " + categoryRank + " AS rank, name, link, description, banner_image_hash, status, sort_order, " +
+	"health_fail_count, health_success_count, last_checked_at, last_fail_reason"
 
 type LinkPos struct {
 	Rank      int
@@ -33,10 +39,15 @@ type LinkPos struct {
 	ID        int
 }
 
-func (r *FriendLinkRepository) ListKeyset(category string, after *LinkPos, limit int) ([]LinkRow, error) {
+func (r *FriendLinkRepository) ListKeyset(category string, after *LinkPos, limit int, visibleOnly bool) ([]LinkRow, error) {
 	q := r.db.Table("friend_link").Select(linkColumns)
 	if category != "" {
 		q = q.Where("category = ?", category)
+	}
+	// abnormal is checker-hidden state; the public page must not render it.
+	// down stays public with its "已下线" chip.
+	if visibleOnly {
+		q = q.Where("status <> ?", StatusAbnormal)
 	}
 	if after != nil {
 		q = q.Where("("+categoryRank+", sort_order, id) > (?, ?, ?)", after.Rank, after.SortOrder, after.ID)
@@ -117,10 +128,31 @@ func (r *FriendLinkRepository) UpdateLink(id int, ch LinkChanges) error {
 			}
 		}
 		set("name", ch.Name, cur.Name)
-		set("link", ch.Link, cur.Link)
+		linkChanged := ch.Link != nil && *ch.Link != cur.Link
+		if linkChanged {
+			updates["link"] = *ch.Link
+		}
 		set("description", ch.Description, cur.Description)
 		set("banner_image_hash", ch.BannerImageHash, cur.BannerImageHash)
-		set("status", ch.Status, cur.Status)
+		statusChanged := ch.Status != nil && *ch.Status != cur.Status
+		if statusChanged {
+			updates["status"] = *ch.Status
+		}
+		// Health history belongs to one target/state: a new URL is a
+		// different probe target, and a staff status change is an explicit
+		// verdict that overrides whatever the checker had accumulated.
+		if linkChanged {
+			updates["health_fail_count"] = 0
+			updates["health_success_count"] = 0
+			updates["last_checked_at"] = nil
+			updates["last_fail_reason"] = ""
+		} else if statusChanged {
+			updates["health_fail_count"] = 0
+			updates["health_success_count"] = 0
+			if *ch.Status == StatusNormal {
+				updates["last_fail_reason"] = ""
+			}
+		}
 		if ch.Category != nil && *ch.Category != cur.Category {
 			pos, err := nextPosition(tx, *ch.Category)
 			if err != nil {

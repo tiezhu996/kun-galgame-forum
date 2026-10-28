@@ -5,6 +5,7 @@ package apiv1
 // matching and publishing fails until its entry here is updated.
 var vocabularies = []vocabulary{
 	{"AccessScope", []string{"public", "login", "role", "users"}},
+	{"AdminFriendLinkState", []string{"abnormal", "down", "normal"}},
 	{"ActivitySort", []string{"occurred_desc", "bumped_desc"}},
 	{"ActivityTopicSection", []string{"normal", "help", "all"}},
 	{"ActivityType", []string{"topic_creation", "topic_reply_creation", "topic_comment_creation", "topic_upvote", "best_answer_set", "galgame_creation", "galgame_edit", "galgame_pr_creation", "galgame_resource_creation", "galgame_resource_comment_creation", "galgame_comment_creation", "galgame_rating_creation", "galgame_rating_comment_creation", "galgame_quiz_creation", "galgame_quiz_comment_creation", "galgame_walkthrough_comment_creation", "galgame_website_creation", "galgame_website_comment_creation", "toolset_creation", "toolset_resource_creation", "toolset_comment_creation", "todo_creation", "update_log_creation"}},

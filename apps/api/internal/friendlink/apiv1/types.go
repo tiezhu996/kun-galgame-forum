@@ -15,7 +15,22 @@ type FriendLink struct {
 	URL                string         `json:"url" format:"uri" maxLength:"500" doc:"The linked site. Always http or https."`
 	Description        string         `json:"description" maxLength:"500" doc:"Short blurb. Empty string if none. Free text; never use it as a decision input."`
 	Banner             *repr.Image    `json:"banner" doc:"Banner image. null when the link has none."`
-	State              string         `json:"state" enum:"normal,down" maxLength:"6" doc:"normal, or down when the linked site is offline."`
+	State              string         `json:"state" enum:"normal,down" maxLength:"6" doc:"normal, or down when staff took the site offline. abnormal links never appear here."`
+}
+
+// AdminFriendLink is the staff view: every state, including checker-owned
+// abnormal, plus the latest probe metadata.
+type AdminFriendLink struct {
+	Object             string         `json:"object" enum:"friend_link" maxLength:"11" doc:"Type discriminant. Always friend_link."`
+	ID                 repr.DecimalID `json:"id" doc:"Friend link id. JSON string of a decimal integer."`
+	FriendLinkCategory string         `json:"friend_link_category" enum:"official,galgame,others" maxLength:"8" doc:"Shelf of the friend-link page, displayed in the order official, galgame, others. Clients label the tokens themselves."`
+	Title              string         `json:"title" maxLength:"100" doc:"Site name. Free text; never use it as a decision input."`
+	URL                string         `json:"url" format:"uri" maxLength:"500" doc:"The linked site. Always http or https."`
+	Description        string         `json:"description" maxLength:"500" doc:"Short blurb. Empty string if none. Free text; never use it as a decision input."`
+	Banner             *repr.Image    `json:"banner" doc:"Banner image. null when the link has none."`
+	State              string         `json:"state" enum:"normal,down,abnormal" maxLength:"8" doc:"normal; down when staff took it offline; abnormal when the health checker hid it after three failed probes."`
+	LastCheckedAt      *repr.DateTime `json:"last_checked_at" doc:"Latest health-probe time. null until the link has been checked once."`
+	LastFailReason     string         `json:"last_fail_reason" maxLength:"200" doc:"Latest probe failure reason; empty string when healthy or never failed. Free text; never use it as a decision input."`
 }
 
 type BannerImageHash string
@@ -62,12 +77,16 @@ type listFriendLinksOutput struct {
 	Body repr.List[FriendLink]
 }
 
+type listAdminFriendLinksOutput struct {
+	Body repr.List[AdminFriendLink]
+}
+
 type friendLinkInput struct {
 	FriendLinkID string `path:"friend_link_id" pattern:"^[1-9][0-9]{0,18}$" maxLength:"19" doc:"Friend link id."`
 }
 
 type friendLinkOutput struct {
-	Body FriendLink
+	Body AdminFriendLink
 }
 
 type createFriendLinkInput struct {
@@ -76,7 +95,7 @@ type createFriendLinkInput struct {
 
 type createFriendLinkOutput struct {
 	Location string `header:"Location" format:"uri-reference" maxLength:"64" doc:"Absolute path of the new link, /api/v1/admin/friend-links/{friend_link_id}."`
-	Body     FriendLink
+	Body     AdminFriendLink
 }
 
 type updateFriendLinkInput struct {

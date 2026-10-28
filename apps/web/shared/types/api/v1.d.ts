@@ -159,7 +159,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List every friend link for staff
+         * @description Every friend link including checker-hidden abnormal ones, with last check time and failure reason. It needs the friend_link.edit permission, which a Bearer request never carries.
+         */
+        get: operations["listAdminFriendLinks"];
         put?: never;
         /**
          * Create a friend link
@@ -6083,6 +6087,39 @@ export interface components {
              */
             view_count: number;
         };
+        AdminFriendLink: {
+            /** @description Banner image. null when the link has none. */
+            banner: components["schemas"]["Image"] | null;
+            /** @description Short blurb. Empty string if none. Free text; never use it as a decision input. */
+            description: string;
+            /** @description Shelf of the friend-link page, displayed in the order official, galgame, others. Clients label the tokens themselves. */
+            friend_link_category: components["schemas"]["FriendLinkCategory"];
+            /** @description Friend link id. JSON string of a decimal integer. */
+            id: string;
+            /**
+             * Format: date-time
+             * @description Latest health-probe time. null until the link has been checked once.
+             */
+            last_checked_at: string | null;
+            /** @description Latest probe failure reason; empty string when healthy or never failed. Free text; never use it as a decision input. */
+            last_fail_reason: string;
+            /**
+             * @description Type discriminant. Always friend_link.
+             * @constant
+             */
+            object: "friend_link";
+            /** @description normal; down when staff took it offline; abnormal when the health checker hid it after three failed probes. */
+            state: components["schemas"]["AdminFriendLinkState"];
+            /** @description Site name. Free text; never use it as a decision input. */
+            title: string;
+            /**
+             * Format: uri
+             * @description The linked site. Always http or https.
+             */
+            url: string;
+        };
+        /** @enum {string} */
+        AdminFriendLinkState: "abnormal" | "down" | "normal";
         AdminOverview: {
             /**
              * Format: int64
@@ -7971,7 +8008,7 @@ export interface components {
              * @constant
              */
             object: "friend_link";
-            /** @description normal, or down when the linked site is offline. */
+            /** @description normal, or down when staff took the site offline. abnormal links never appear here. */
             state: components["schemas"]["FriendLinkState"];
             /** @description Site name. Free text; never use it as a decision input. */
             title: string;
@@ -8522,6 +8559,17 @@ export interface components {
         ListActivity: {
             /** @description Members of this page. Empty array, never null. */
             items: components["schemas"]["Activity"][];
+            /** @description Opaque keyset cursor. Omitted on the last page. */
+            next_cursor?: string;
+            /**
+             * @description Type discriminant. Always list.
+             * @constant
+             */
+            object: "list";
+        };
+        ListAdminFriendLink: {
+            /** @description Members of this page. Empty array, never null. */
+            items: components["schemas"]["AdminFriendLink"][];
             /** @description Opaque keyset cursor. Omitted on the last page. */
             next_cursor?: string;
             /**
@@ -17219,6 +17267,78 @@ export interface operations {
             };
         };
     };
+    listAdminFriendLinks: {
+        parameters: {
+            query?: {
+                /** @description Opaque keyset cursor from a previous page of this collection. */
+                cursor?: string;
+                /** @description Page size. 1–100, default 20. Values above 100 are rejected, not clamped. */
+                limit?: number;
+                /** @description When set, only this shelf. Omitted means every shelf. */
+                friend_link_category?: components["schemas"]["FriendLinkCategory"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListAdminFriendLink"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description PERMISSION_REQUIRED when the caller lacks friend_link.edit. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     createFriendLink: {
         parameters: {
             query?: never;
@@ -17242,7 +17362,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FriendLink"];
+                    "application/json": components["schemas"]["AdminFriendLink"];
                 };
             };
             /** @description Bad Request */
@@ -17346,7 +17466,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FriendLink"];
+                    "application/json": components["schemas"]["AdminFriendLink"];
                 };
             };
             /** @description Bad Request */
@@ -17502,7 +17622,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FriendLink"];
+                    "application/json": components["schemas"]["AdminFriendLink"];
                 };
             };
             /** @description Bad Request */

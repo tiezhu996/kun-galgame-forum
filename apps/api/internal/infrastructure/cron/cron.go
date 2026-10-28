@@ -40,6 +40,7 @@ type Jobs struct {
 	StickerPackRefresh         func()
 	NotificationRetention      func()
 	TopicAISweep               func()
+	FriendLinkCheck            func()
 }
 
 func Start(
@@ -141,6 +142,10 @@ func Start(
 
 	if jobs.StickerPackRefresh != nil {
 		schedule(c, "5 * * * *", "表情包列表刷新", jobs.StickerPackRefresh)
+	}
+
+	if jobs.FriendLinkCheck != nil {
+		schedule(c, "*/30 * * * *", "友链健康检查", jobs.FriendLinkCheck)
 	}
 
 	c.Start()

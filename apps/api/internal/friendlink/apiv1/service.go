@@ -63,6 +63,8 @@ func trimText(s string) string {
 
 var linkStates = []string{"normal", "down"}
 
+var adminLinkStates = []string{"normal", "down", "abnormal"}
+
 func (s *Service) metas(rows []repository.LinkRow) map[string]imageclient.ImageMeta {
 	if s.images == nil {
 		return nil
@@ -81,21 +83,14 @@ func (s *Service) metas(rows []repository.LinkRow) map[string]imageclient.ImageM
 
 // friendLink refuses a stored status outside the closed enum rather than
 // passing it off as normal: essential was dropped from the contract because no
-// row ever held it, so seeing one means the contract is wrong.
+// row ever held it, so seeing one means the contract is wrong. abnormal never
+// reaches the public list, so it is rejected here too.
 func (s *Service) friendLink(row repository.LinkRow, metas map[string]imageclient.ImageMeta) (FriendLink, error) {
 	if !slices.Contains(linkStates, row.Status) {
 		return FriendLink{}, fmt.Errorf("friend_link %d has status %q outside the closed enum", row.ID, row.Status)
 	}
 	if !slices.Contains(repository.Categories, row.Category) {
 		return FriendLink{}, fmt.Errorf("friend_link %d has category %q outside the closed enum", row.ID, row.Category)
-	}
-	var banner *repr.Image
-	if row.BannerImageHash != "" {
-		var meta *imageclient.ImageMeta
-		if m, ok := metas[row.BannerImageHash]; ok {
-			meta = &m
-		}
-		banner = repr.NewImage(s.cdn, row.BannerImageHash, meta)
 	}
 	return FriendLink{
 		Object:             "friend_link",
@@ -104,37 +99,52 @@ func (s *Service) friendLink(row repository.LinkRow, metas map[string]imageclien
 		Title:              row.Name,
 		URL:                row.Link,
 		Description:        row.Description,
-		Banner:             banner,
+		Banner:             s.banner(row, metas),
 		State:              row.Status,
 	}, nil
+}
+
+// adminFriendLink is the same row in the staff view, where abnormal is legal
+// and the probe metadata rides along.
+func (s *Service) adminFriendLink(row repository.LinkRow, metas map[string]imageclient.ImageMeta) (AdminFriendLink, error) {
+	if !slices.Contains(adminLinkStates, row.Status) {
+		return AdminFriendLink{}, fmt.Errorf("friend_link %d has status %q outside the closed enum", row.ID, row.Status)
+	}
+	if !slices.Contains(repository.Categories, row.Category) {
+		return AdminFriendLink{}, fmt.Errorf("friend_link %d has category %q outside the closed enum", row.ID, row.Category)
+	}
+	return AdminFriendLink{
+		Object:             "friend_link",
+		ID:                 repr.ID(row.ID),
+		FriendLinkCategory: row.Category,
+		Title:              row.Name,
+		URL:                row.Link,
+		Description:        row.Description,
+		Banner:             s.banner(row, metas),
+		State:              row.Status,
+		LastCheckedAt:      repr.TimestampPtr(row.LastCheckedAt),
+		LastFailReason:     row.LastFailReason,
+	}, nil
+}
+
+func (s *Service) banner(row repository.LinkRow, metas map[string]imageclient.ImageMeta) *repr.Image {
+	if row.BannerImageHash == "" {
+		return nil
+	}
+	var meta *imageclient.ImageMeta
+	if m, ok := metas[row.BannerImageHash]; ok {
+		meta = &m
+	}
+	return repr.NewImage(s.cdn, row.BannerImageHash, meta)
 }
 
 func (s *Service) listFriendLinks(_ context.Context, in *listFriendLinksInput) (*listFriendLinksOutput, error) {
 	if prob := s.ready(); prob != nil {
 		return nil, prob
 	}
-	const sortToken = "position_asc"
-	fp := collect.Fingerprint(sortToken, in.FriendLinkCategory)
-	keys, curErr := collect.DecodeCursor(in.Cursor, sortToken, fp)
-	if curErr != nil {
-		return nil, curErr
-	}
-	var after *repository.LinkPos
-	if keys != nil {
-		pos, ok := decodePos(keys)
-		if !ok {
-			return nil, problem.New(problem.CodeInvalidCursor, "The cursor is malformed or was issued for different parameters.",
-				problem.AtParameter("cursor", problem.ReasonInvalidFormat, "cursor does not decode for this collection", nil))
-		}
-		after = pos
-	}
-	rows, err := s.repo.ListKeyset(in.FriendLinkCategory, after, in.Limit)
-	if err != nil {
-		return nil, problem.Internal(err)
-	}
-	more := len(rows) > in.Limit
-	if more {
-		rows = rows[:in.Limit]
+	rows, next, prob := s.fetchLinkPage(in.FriendLinkCategory, in.Cursor, in.Limit, true)
+	if prob != nil {
+		return nil, prob
 	}
 	metas := s.metas(rows)
 	items := make([]FriendLink, 0, len(rows))
@@ -145,13 +155,62 @@ func (s *Service) listFriendLinks(_ context.Context, in *listFriendLinksInput) (
 		}
 		items = append(items, item)
 	}
+	return &listFriendLinksOutput{Body: repr.NewList(items, next)}, nil
+}
+
+func (s *Service) listAdminFriendLinks(ctx context.Context, in *listFriendLinksInput) (*listAdminFriendLinksOutput, error) {
+	if prob := s.require(ctx, perm.FriendLinkEdit); prob != nil {
+		return nil, prob
+	}
+	rows, next, prob := s.fetchLinkPage(in.FriendLinkCategory, in.Cursor, in.Limit, false)
+	if prob != nil {
+		return nil, prob
+	}
+	metas := s.metas(rows)
+	items := make([]AdminFriendLink, 0, len(rows))
+	for _, row := range rows {
+		item, err := s.adminFriendLink(row, metas)
+		if err != nil {
+			return nil, problem.Internal(err)
+		}
+		items = append(items, item)
+	}
+	return &listAdminFriendLinksOutput{Body: repr.NewList(items, next)}, nil
+}
+
+// fetchLinkPage walks one shelf-ordered keyset page. visibleOnly hides the
+// checker-owned abnormal rows from the public collection.
+func (s *Service) fetchLinkPage(category, cursor string, limit int, visibleOnly bool) ([]repository.LinkRow, *string, *problem.Problem) {
+	const sortToken = "position_asc"
+	fp := collect.Fingerprint(sortToken, category)
+	keys, curErr := collect.DecodeCursor(cursor, sortToken, fp)
+	if curErr != nil {
+		return nil, nil, curErr
+	}
+	var after *repository.LinkPos
+	if keys != nil {
+		pos, ok := decodePos(keys)
+		if !ok {
+			return nil, nil, problem.New(problem.CodeInvalidCursor, "The cursor is malformed or was issued for different parameters.",
+				problem.AtParameter("cursor", problem.ReasonInvalidFormat, "cursor does not decode for this collection", nil))
+		}
+		after = pos
+	}
+	rows, err := s.repo.ListKeyset(category, after, limit, visibleOnly)
+	if err != nil {
+		return nil, nil, problem.Internal(err)
+	}
+	more := len(rows) > limit
+	if more {
+		rows = rows[:limit]
+	}
 	var next *string
 	if more {
 		last := rows[len(rows)-1]
 		cur := collect.EncodeCursor(sortToken, fp, strconv.Itoa(last.Rank), strconv.Itoa(last.SortOrder), strconv.Itoa(last.ID))
 		next = &cur
 	}
-	return &listFriendLinksOutput{Body: repr.NewList(items, next)}, nil
+	return rows, next, nil
 }
 
 func decodePos(keys []string) (*repository.LinkPos, bool) {
@@ -180,7 +239,7 @@ func parseID(raw string) (int, *problem.Problem) {
 	return id, nil
 }
 
-func (s *Service) load(id int) (*FriendLink, *problem.Problem) {
+func (s *Service) load(id int) (*AdminFriendLink, *problem.Problem) {
 	row, err := s.repo.FindRow(id)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, notFound()
@@ -188,7 +247,7 @@ func (s *Service) load(id int) (*FriendLink, *problem.Problem) {
 	if err != nil {
 		return nil, problem.Internal(err)
 	}
-	link, err := s.friendLink(*row, s.metas([]repository.LinkRow{*row}))
+	link, err := s.adminFriendLink(*row, s.metas([]repository.LinkRow{*row}))
 	if err != nil {
 		return nil, problem.Internal(err)
 	}

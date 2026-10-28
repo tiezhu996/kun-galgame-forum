@@ -176,10 +176,12 @@ export type DocSort = NonNullable<
 >
 
 export type FriendLink = components['schemas']['FriendLink']
+export type AdminFriendLink = components['schemas']['AdminFriendLink']
 export type FriendLinkCreate = components['schemas']['FriendLinkCreate']
 export type FriendLinkPatch = components['schemas']['FriendLinkPatch']
 export type FriendLinkCategory = FriendLink['friend_link_category']
 export type FriendLinkState = FriendLink['state']
+export type AdminFriendLinkState = AdminFriendLink['state']
 export type AppVersion = components['schemas']['AppVersion']
 export type AppPlatform = keyof AppVersion['downloads']
 

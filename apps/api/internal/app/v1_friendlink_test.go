@@ -272,6 +272,123 @@ func TestV1FriendLinkOrderReplacesTheShelf(t *testing.T) {
 	}
 }
 
+func (f *writeFix) walkAdminLinks(t *testing.T, session string, hdr http.Header) []map[string]any {
+	t.Helper()
+	q := url.Values{}
+	var items []map[string]any
+	for range 50 {
+		resp, body := f.docCall(t, http.MethodGet, "/api/v1/admin/friend-links?"+q.Encode(),
+			"/admin/friend-links", session, "", hdr, nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("admin list %d %+v", resp.StatusCode, body)
+		}
+		raw, _ := body["items"].([]any)
+		for _, it := range raw {
+			m, _ := it.(map[string]any)
+			items = append(items, m)
+		}
+		next, _ := body["next_cursor"].(string)
+		if next == "" {
+			return items
+		}
+		q.Set("cursor", next)
+	}
+	t.Fatal("admin walk did not end")
+	return nil
+}
+
+func TestV1FriendLinkAbnormalHiddenFromPublicVisibleToStaff(t *testing.T) {
+	f := newFriendLinkFix(t)
+	abnormal := linkSeedMin + 6
+	if err := f.db.Exec(`UPDATE friend_link SET status = 'abnormal', health_fail_count = 3,
+		last_checked_at = now(), last_fail_reason = 'HTTP 502' WHERE id = ?`, abnormal).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	publicIDs := f.walkLinks(t, url.Values{})
+	for _, id := range publicIDs {
+		if id == fmt.Sprint(abnormal) {
+			t.Fatalf("abnormal link %d leaked into the public list", abnormal)
+		}
+	}
+
+	items := f.walkAdminLinks(t, "sess-staff", nil)
+	var found map[string]any
+	for _, m := range items {
+		if fmt.Sprint(m["id"]) == fmt.Sprint(abnormal) {
+			found = m
+		}
+		for _, banned := range []string{"health_fail_count", "health_success_count", "sort_order"} {
+			if _, has := m[banned]; has {
+				t.Errorf("admin item carries %s", banned)
+			}
+		}
+	}
+	if found == nil {
+		t.Fatalf("abnormal link %d missing from the staff list", abnormal)
+	}
+	if found["state"] != "abnormal" || found["last_fail_reason"] != "HTTP 502" {
+		t.Errorf("staff view metadata wrong: %+v", found)
+	}
+	if checked, _ := found["last_checked_at"].(string); checked == "" {
+		t.Errorf("last_checked_at missing: %+v", found)
+	}
+
+	// The down seed row stays public with its chip: manual-offline visibility is unchanged.
+	down := fmt.Sprint(linkSeedMin + 4)
+	var sawDown bool
+	for _, id := range publicIDs {
+		if id == down {
+			sawDown = true
+		}
+	}
+	if !sawDown {
+		t.Error("a manually down link disappeared from the public list")
+	}
+}
+
+func TestV1AdminFriendLinkListPermissions(t *testing.T) {
+	f := newFriendLinkFix(t)
+	u := "/api/v1/admin/friend-links"
+	spec := "/admin/friend-links"
+	if resp, _ := f.docCall(t, http.MethodGet, u, spec, "", "", nil, nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("anonymous admin list: %d", resp.StatusCode)
+	}
+	if resp, _ := f.docCall(t, http.MethodGet, u, spec, "sess-alice", "", nil, nil); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("user admin list: %d", resp.StatusCode)
+	}
+	if resp, _ := f.docCall(t, http.MethodGet, u, spec, "", "",
+		http.Header{"Authorization": {"Bearer staff-token"}}, nil); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("bearer admin list: %d", resp.StatusCode)
+	}
+}
+
+func TestV1FriendLinkAbnormalIsNotSettableButNormalRescues(t *testing.T) {
+	f := newFriendLinkFix(t)
+	abnormal := linkSeedMin + 6
+	if err := f.db.Exec(`UPDATE friend_link SET status = 'abnormal', health_fail_count = 3, health_success_count = 0,
+		last_checked_at = now(), last_fail_reason = 'HTTP 502' WHERE id = ?`, abnormal).Error; err != nil {
+		t.Fatal(err)
+	}
+	id := fmt.Sprint(abnormal)
+
+	if resp, body := f.linkCall(t, http.MethodPatch, id, "sess-staff", nil,
+		map[string]any{"state": "abnormal"}); resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("patch state=abnormal: %d %+v", resp.StatusCode, body)
+	}
+
+	resp, body := f.linkCall(t, http.MethodPatch, id, "sess-staff", nil, map[string]any{"state": "normal"})
+	if resp.StatusCode != http.StatusOK || body["state"] != "normal" || body["last_fail_reason"] != "" {
+		t.Fatalf("rescue patch: %d %+v", resp.StatusCode, body)
+	}
+	for _, pub := range f.walkLinks(t, url.Values{}) {
+		if pub == id {
+			return
+		}
+	}
+	t.Fatal("rescued link still hidden from the public list")
+}
+
 func TestV1AppVersion(t *testing.T) {
 	f := newWriteFix(t, nil)
 	f.Config.AppRelease.MinVersion = "1.2.0"
