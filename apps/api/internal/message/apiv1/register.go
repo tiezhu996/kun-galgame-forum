@@ -31,6 +31,28 @@ func Register(svc *Service) func(huma.API) {
 		}), svc.listNotifications)
 
 		huma.Register(api, v1.Required(huma.Operation{
+			OperationID: "searchMyMessages",
+			Method:      http.MethodGet,
+			Path:        "/me/message-search",
+			Summary:     "Search the caller's notifications and direct messages",
+			Description: "One keyword phrase over both the caller's notifications (message rows where the caller is receiver) " +
+				"and the caller's private direct messages (chat_message rows of private rooms the caller participates in), " +
+				"merged into one list newest first. Ties break direct_message before notification, then descending row id. " +
+				"The phrase is one case-insensitive substring; percent, underscore and backslash are literal characters. " +
+				"sender_id narrows both sources to rows that user sent. within is the time window all (default), 7d or 30d against the server clock. " +
+				"A notification hit carries notification_type, path and, when rooted in a topic that still exists, topic_title. " +
+				"A recalled direct message still matches on its former text, but its snippet is an empty string, state is recalled and recalled_at is set; " +
+				"its former text is never returned. Rows whose notification type is unknown or whose actor or conversation peer is banned are dropped; a missing account renders as a user ref with name null, " +
+				"with the same refill and scan-cap behavior as listNotifications, so a page can be short; only an absent next_cursor means the end. " +
+				"When the account service is unreachable, senders and peers render as deleted-user refs, the same degradation listNotifications uses. " +
+				"Search is read-only and marks nothing read. The cursor is bound to (caller, q, sender_id, within).",
+			Tags: []string{"messages"},
+			Responses: problemResponses(map[int]string{
+				400: "INVALID_PARAMETER (blank or overlong q, malformed sender_id), UNKNOWN_ENUM_VALUE (within), INVALID_CURSOR, or LIMIT_TOO_LARGE.",
+			}),
+		}), svc.searchMyMessages)
+
+		huma.Register(api, v1.Required(huma.Operation{
 			OperationID: "getNotificationSummary",
 			Method:      http.MethodGet,
 			Path:        "/me/notifications/summary",

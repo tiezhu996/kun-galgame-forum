@@ -102,6 +102,11 @@ export type NotificationPreferences =
   components['schemas']['NotificationPreferences']
 export type Conversation = components['schemas']['Conversation']
 export type DirectMessage = components['schemas']['DirectMessage']
+export type MessageSearchResult =
+  components['schemas']['MessageSearchResult']
+export type MessageSearchWithin =
+  components['schemas']['MessageSearchWithin']
+export type MessageSearchHit = MessageSearchResult['hit']
 
 export type ContentDocument = components['schemas']['ContentDocument']
 export type BlockNode = components['schemas']['BlockNode']

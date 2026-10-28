@@ -28,6 +28,16 @@ watch(noticeEpoch, () => {
   >
     <h2 class="px-2 text-2xl">消息</h2>
 
+    <KunLink
+      color="default"
+      underline="none"
+      class-name="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-primary/10"
+      to="/message/search"
+    >
+      <KunIcon name="lucide:search" />
+      搜索消息
+    </KunLink>
+
     <KunDivider />
 
     <MessageAsideNoticeItem :summary="summary" />

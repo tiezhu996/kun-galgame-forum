@@ -7815,6 +7815,34 @@
         ],
         "type": "object"
       },
+      "ListMessageSearchResult": {
+        "properties": {
+          "items": {
+            "description": "Members of this page. Empty array, never null.",
+            "items": {
+              "$ref": "#/components/schemas/MessageSearchResult"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "description": "Opaque keyset cursor. Omitted on the last page.",
+            "maxLength": 512,
+            "pattern": "^cur_[A-Za-z0-9_-]+$",
+            "type": "string"
+          },
+          "object": {
+            "const": "list",
+            "description": "Type discriminant. Always list.",
+            "maxLength": 4,
+            "type": "string"
+          }
+        },
+        "required": [
+          "object",
+          "items"
+        ],
+        "type": "object"
+      },
       "ListMoemoepointEntry": {
         "properties": {
           "items": {
@@ -9998,6 +10026,137 @@
           "mentioned_user"
         ],
         "type": "object"
+      },
+      "MessageSearchHit": {
+        "enum": [
+          "notification",
+          "direct_message"
+        ],
+        "maxLength": 14,
+        "type": "string",
+        "x-vocabulary-closed": true
+      },
+      "MessageSearchResult": {
+        "properties": {
+          "created_at": {
+            "description": "Creation time of the matched row.",
+            "format": "date-time",
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+            "type": "string"
+          },
+          "hit": {
+            "$ref": "#/components/schemas/MessageSearchHit",
+            "description": "Which inbox held the match: a notification or a direct message."
+          },
+          "id": {
+            "description": "Composite of hit and the table row id, unique across both sources.",
+            "maxLength": 34,
+            "pattern": "^(notification|direct_message):[1-9][0-9]{0,18}$",
+            "type": "string"
+          },
+          "notification_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NotificationType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null unless hit is notification."
+          },
+          "object": {
+            "const": "message_search_result",
+            "description": "Type discriminant. Always message_search_result.",
+            "maxLength": 21,
+            "type": "string"
+          },
+          "path": {
+            "description": "In-site path the notification opens. null unless hit is notification.",
+            "maxLength": 100,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "peer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The other participant of the direct-message conversation. null unless hit is direct_message."
+          },
+          "recalled_at": {
+            "description": "When the direct message was recalled. null unless it is recalled. null for every notification hit.",
+            "format": "date-time",
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sender": {
+            "$ref": "#/components/schemas/UserRef",
+            "description": "Who wrote the matched text: the notification actor, or the sender of the direct message. A system_notice comes from id 0."
+          },
+          "snippet_markdown": {
+            "description": "The stored markdown text that matched. Empty string when hit is direct_message and the message is recalled; read state, not emptiness.",
+            "maxLength": 1000,
+            "type": "string"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DirectMessageState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Direct-message lifecycle state. null unless hit is direct_message."
+          },
+          "topic_title": {
+            "description": "Title of the root topic when hit is a notification rooted in a topic that still exists; otherwise null, including every direct-message hit. Free text; never use it as a decision input.",
+            "maxLength": 233,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "object",
+          "hit",
+          "id",
+          "created_at",
+          "sender",
+          "snippet_markdown",
+          "notification_type",
+          "path",
+          "topic_title",
+          "peer",
+          "state",
+          "recalled_at"
+        ],
+        "type": "object"
+      },
+      "MessageSearchWithin": {
+        "enum": [
+          "all",
+          "7d",
+          "30d"
+        ],
+        "maxLength": 3,
+        "type": "string",
+        "x-vocabulary-closed": true
       },
       "MiniApp": {
         "enum": [
@@ -45124,6 +45283,150 @@
         "summary": "Follow a user",
         "tags": [
           "users"
+        ]
+      }
+    },
+    "/me/message-search": {
+      "get": {
+        "description": "One keyword phrase over both the caller's notifications (message rows where the caller is receiver) and the caller's private direct messages (chat_message rows of private rooms the caller participates in), merged into one list newest first. Ties break direct_message before notification, then descending row id. The phrase is one case-insensitive substring; percent, underscore and backslash are literal characters. sender_id narrows both sources to rows that user sent. within is the time window all (default), 7d or 30d against the server clock. A notification hit carries notification_type, path and, when rooted in a topic that still exists, topic_title. A recalled direct message still matches on its former text, but its snippet is an empty string, state is recalled and recalled_at is set; its former text is never returned. Rows whose notification type is unknown or whose actor or conversation peer is banned are dropped; a missing account renders as a user ref with name null, with the same refill and scan-cap behavior as listNotifications, so a page can be short; only an absent next_cursor means the end. When the account service is unreachable, senders and peers render as deleted-user refs, the same degradation listNotifications uses. Search is read-only and marks nothing read. The cursor is bound to (caller, q, sender_id, within).",
+        "operationId": "searchMyMessages",
+        "parameters": [
+          {
+            "description": "Opaque keyset cursor from a previous page of this collection.",
+            "explode": false,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "Opaque keyset cursor from a previous page of this collection.",
+              "maxLength": 512,
+              "pattern": "^cur_[A-Za-z0-9_-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page size. 1–100, default 20. Values above 100 are rejected, not clamped.",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 20,
+              "description": "Page size. 1–100, default 20. Values above 100 are rejected, not clamped.",
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Search phrase, 1-50 characters after trimming. Matched as one case-insensitive substring against the notification excerpt and direct-message text; percent, underscore and backslash are literal characters, not wildcards. Free text; never use it as a decision input.",
+            "explode": false,
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "Search phrase, 1-50 characters after trimming. Matched as one case-insensitive substring against the notification excerpt and direct-message text; percent, underscore and backslash are literal characters, not wildcards. Free text; never use it as a decision input.",
+              "maxLength": 50,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "When set, only hits whose stored sender is this user: the triggering actor on a notification, the writer of a direct message (which can be the caller). Omitted matches every sender.",
+            "explode": false,
+            "in": "query",
+            "name": "sender_id",
+            "schema": {
+              "description": "When set, only hits whose stored sender is this user: the triggering actor on a notification, the writer of a direct message (which can be the caller). Omitted matches every sender.",
+              "maxLength": 19,
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Time window. all (default), 7d or 30d. An unknown token is UNKNOWN_ENUM_VALUE.",
+            "explode": false,
+            "in": "query",
+            "name": "within",
+            "schema": {
+              "$ref": "#/components/schemas/MessageSearchWithin",
+              "default": "all",
+              "description": "Time window. all (default), 7d or 30d. An unknown token is UNKNOWN_ENUM_VALUE."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListMessageSearchResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INVALID_PARAMETER (blank or overlong q, malformed sender_id), UNKNOWN_ENUM_VALUE (within), INVALID_CURSOR, or LIMIT_TOO_LARGE."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Search the caller's notifications and direct messages",
+        "tags": [
+          "messages"
         ]
       }
     },

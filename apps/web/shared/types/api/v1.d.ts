@@ -2104,6 +2104,26 @@ export interface paths {
         patch: operations["setUserFollowNotify"];
         trace?: never;
     };
+    "/me/message-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search the caller's notifications and direct messages
+         * @description One keyword phrase over both the caller's notifications (message rows where the caller is receiver) and the caller's private direct messages (chat_message rows of private rooms the caller participates in), merged into one list newest first. Ties break direct_message before notification, then descending row id. The phrase is one case-insensitive substring; percent, underscore and backslash are literal characters. sender_id narrows both sources to rows that user sent. within is the time window all (default), 7d or 30d against the server clock. A notification hit carries notification_type, path and, when rooted in a topic that still exists, topic_title. A recalled direct message still matches on its former text, but its snippet is an empty string, state is recalled and recalled_at is set; its former text is never returned. Rows whose notification type is unknown or whose actor or conversation peer is banned are dropped; a missing account renders as a user ref with name null, with the same refill and scan-cap behavior as listNotifications, so a page can be short; only an absent next_cursor means the end. When the account service is unreachable, senders and peers render as deleted-user refs, the same degradation listNotifications uses. Search is read-only and marks nothing read. The cursor is bound to (caller, q, sender_id, within).
+         */
+        get: operations["searchMyMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/moemoepoint-entries": {
         parameters: {
             query?: never;
@@ -8673,6 +8693,17 @@ export interface components {
              */
             object: "list";
         };
+        ListMessageSearchResult: {
+            /** @description Members of this page. Empty array, never null. */
+            items: components["schemas"]["MessageSearchResult"][];
+            /** @description Opaque keyset cursor. Omitted on the last page. */
+            next_cursor?: string;
+            /**
+             * @description Type discriminant. Always list.
+             * @constant
+             */
+            object: "list";
+        };
         ListMoemoepointEntry: {
             /** @description Members of this page. Empty array, never null. */
             items: components["schemas"]["MoemoepointEntry"][];
@@ -9507,6 +9538,45 @@ export interface components {
              */
             object: "mention";
         };
+        /** @enum {string} */
+        MessageSearchHit: "notification" | "direct_message";
+        MessageSearchResult: {
+            /**
+             * Format: date-time
+             * @description Creation time of the matched row.
+             */
+            created_at: string;
+            /** @description Which inbox held the match: a notification or a direct message. */
+            hit: components["schemas"]["MessageSearchHit"];
+            /** @description Composite of hit and the table row id, unique across both sources. */
+            id: string;
+            /** @description null unless hit is notification. */
+            notification_type: components["schemas"]["NotificationType"] | null;
+            /**
+             * @description Type discriminant. Always message_search_result.
+             * @constant
+             */
+            object: "message_search_result";
+            /** @description In-site path the notification opens. null unless hit is notification. */
+            path: string | null;
+            /** @description The other participant of the direct-message conversation. null unless hit is direct_message. */
+            peer: components["schemas"]["UserRef"] | null;
+            /**
+             * Format: date-time
+             * @description When the direct message was recalled. null unless it is recalled. null for every notification hit.
+             */
+            recalled_at: string | null;
+            /** @description Who wrote the matched text: the notification actor, or the sender of the direct message. A system_notice comes from id 0. */
+            sender: components["schemas"]["UserRef"];
+            /** @description The stored markdown text that matched. Empty string when hit is direct_message and the message is recalled; read state, not emptiness. */
+            snippet_markdown: string;
+            /** @description Direct-message lifecycle state. null unless hit is direct_message. */
+            state: components["schemas"]["DirectMessageState"] | null;
+            /** @description Title of the root topic when hit is a notification rooted in a topic that still exists; otherwise null, including every direct-message hit. Free text; never use it as a decision input. */
+            topic_title: string | null;
+        };
+        /** @enum {string} */
+        MessageSearchWithin: "all" | "7d" | "30d";
         /** @enum {string} */
         MiniApp: "poll" | "lottery";
         MoemoepointEntry: {
@@ -27902,6 +27972,82 @@ export interface operations {
                 };
             };
             /** @description SERVICE_UNAVAILABLE when the community service is unreachable or unconfigured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    searchMyMessages: {
+        parameters: {
+            query: {
+                /** @description Opaque keyset cursor from a previous page of this collection. */
+                cursor?: string;
+                /** @description Page size. 1–100, default 20. Values above 100 are rejected, not clamped. */
+                limit?: number;
+                /** @description Search phrase, 1-50 characters after trimming. Matched as one case-insensitive substring against the notification excerpt and direct-message text; percent, underscore and backslash are literal characters, not wildcards. Free text; never use it as a decision input. */
+                q: string;
+                /** @description When set, only hits whose stored sender is this user: the triggering actor on a notification, the writer of a direct message (which can be the caller). Omitted matches every sender. */
+                sender_id?: string;
+                /** @description Time window. all (default), 7d or 30d. An unknown token is UNKNOWN_ENUM_VALUE. */
+                within?: components["schemas"]["MessageSearchWithin"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListMessageSearchResult"];
+                };
+            };
+            /** @description INVALID_PARAMETER (blank or overlong q, malformed sender_id), UNKNOWN_ENUM_VALUE (within), INVALID_CURSOR, or LIMIT_TOO_LARGE. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

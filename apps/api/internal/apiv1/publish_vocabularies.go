@@ -47,6 +47,8 @@ var vocabularies = []vocabulary{
 	{"LotteryPointMode", []string{"fixed", "split", "random"}},
 	{"LotteryState", []string{"open", "drawing", "drawn", "cancelled"}},
 	{"LotteryTargetState", []string{"drawn", "cancelled"}},
+	{"MessageSearchHit", []string{"notification", "direct_message"}},
+	{"MessageSearchWithin", []string{"all", "7d", "30d"}},
 	{"MiniApp", []string{"poll", "lottery"}},
 	{"MoemoepointSource", []string{"this_site", "account_center", "other_site"}},
 	{"MutedType", []string{"upvoted", "liked", "favorited", "replied", "commented", "mentioned", "followed_thread_activity", "best_answer_chosen", "reply_pinned", "quiz_answered", "resource_link_reported", "edit_requested", "edit_merged", "edit_declined", "lottery_won", "lottery_drawn", "lottery_code_expired", "poll_closed", "user_followed", "followee_topic_created", "followee_activity_published", "subscribed_topic_replied", "resource_relocated", "system_notice", "chat"}},
