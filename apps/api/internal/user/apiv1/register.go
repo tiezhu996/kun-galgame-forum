@@ -132,8 +132,8 @@ func Register(u *Users) func(huma.API) {
 			OperationID: "getNotificationPreferences",
 			Method:      http.MethodGet,
 			Path:        "/me/notification-preferences",
-			Summary:     "Get the caller's muted notification types",
-			Description: "Returns the notification types the caller has muted. Unknown stored values are dropped. An account with no forum state returns an empty list.",
+			Summary:     "Get the caller's notification preferences",
+			Description: "Returns the notification types the caller has muted and is_quiet_hours_enabled. Unknown stored values are dropped. An account with no forum state returns an empty muted list and is_quiet_hours_enabled true (the default).",
 			Tags:        []string{"users"},
 		}), u.getNotificationPreferences)
 
@@ -141,8 +141,8 @@ func Register(u *Users) func(huma.API) {
 			OperationID: "putNotificationPreferences",
 			Method:      http.MethodPut,
 			Path:        "/me/notification-preferences",
-			Summary:     "Replace the caller's muted notification types",
-			Description: "Replaces the notification types the caller has muted. Unknown tokens are refused. The stored values are the forum's database keys; the response uses the same v1 tokens as the request.",
+			Summary:     "Replace the caller's notification preferences",
+			Description: "Replaces the notification types the caller has muted and, when is_quiet_hours_enabled is present, that flag in one write. Unknown tokens are refused. An absent is_quiet_hours_enabled keeps the stored value, so clients predating the field keep working. The flag controls the fixed 23:00-08:00 Asia/Shanghai quiet window and the change applies to the current window immediately. The stored values are the forum's database keys; the response uses the same v1 tokens as the request.",
 			Tags:        []string{"users"},
 			Responses: problemResponses(map[int]string{
 				422: "VALIDATION_FAILED when muted_types holds an unknown token or a duplicate.",

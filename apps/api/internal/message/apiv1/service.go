@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	v1 "kun-galgame-api/internal/apiv1"
@@ -11,6 +12,7 @@ import (
 	"kun-galgame-api/internal/apiv1/content"
 	"kun-galgame-api/internal/apiv1/repr"
 	"kun-galgame-api/internal/message/notifytype"
+	quietpkg "kun-galgame-api/internal/message/quiet"
 	"kun-galgame-api/internal/message/repository"
 	msgService "kun-galgame-api/internal/message/service"
 	"kun-galgame-api/internal/middleware"
@@ -115,13 +117,13 @@ func (s *Service) requirePeer(ctx context.Context, callerID int, raw string) (in
 	return id, u, nil
 }
 
-func (s *Service) mutedTypes(userID int) ([]string, bool, *problem.Problem) {
-	keys, err := s.messages.FindMutedTypes(userID)
+func (s *Service) notificationSettings(userID int) ([]string, bool, quietpkg.Hold, *problem.Problem) {
+	keys, quietOn, err := s.messages.FindNotificationSettings(userID)
 	if err != nil {
-		return nil, false, problem.Internal(err)
+		return nil, false, quietpkg.NoHold(), problem.Internal(err)
 	}
 	local, chatMuted := msgService.SplitMuted(keys)
-	return local, chatMuted, nil
+	return local, chatMuted, quietpkg.At(time.Now(), quietOn), nil
 }
 
 func (s *Service) convertBodies(ctx context.Context, sources []string) ([]content.ContentDocument, *problem.Problem) {

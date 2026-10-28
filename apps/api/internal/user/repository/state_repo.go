@@ -99,6 +99,21 @@ func (r *StateRepository) UpdateMutedTypes(userID int, keys []string) error {
 	).Error
 }
 
+func (r *StateRepository) UpdateNotificationPrefs(userID int, keys []string, quietHoursEnabled bool) error {
+	if keys == nil {
+		keys = []string{}
+	}
+	data, err := json.Marshal(keys)
+	if err != nil {
+		return err
+	}
+	return r.db.Exec(
+		`UPDATE kungal_user_state SET muted_notification_types = ?::jsonb, quiet_hours_enabled = ?
+WHERE user_id = ?`,
+		string(data), quietHoursEnabled, userID,
+	).Error
+}
+
 func (r *StateRepository) ProfileSignInRequired(ctx context.Context, userID int) (bool, error) {
 	var required bool
 	err := r.db.WithContext(ctx).Raw(

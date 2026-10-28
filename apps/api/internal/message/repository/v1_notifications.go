@@ -2,9 +2,10 @@ package repository
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"time"
+
+	"kun-galgame-api/internal/message/quiet"
 
 	"gorm.io/gorm"
 )
@@ -53,28 +54,6 @@ func partitionSQL(muted bool, mutedTypes []string) (string, []any) {
 	return " AND type NOT IN ?", []any{mutedTypes}
 }
 
-func (r *MessageRepository) FindMutedTypes(userID int) ([]string, error) {
-	var raw string
-	err := r.db.Raw(
-		`SELECT COALESCE(muted_notification_types::text, '[]') FROM kungal_user_state WHERE user_id = ?`,
-		userID,
-	).Scan(&raw).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	if raw == "" {
-		return nil, nil
-	}
-	var keys []string
-	if err := json.Unmarshal([]byte(raw), &keys); err != nil {
-		return nil, err
-	}
-	return keys, nil
-}
-
 func (r *MessageRepository) FindNotificationsKeyset(
 	receiverID int,
 	muted bool,
@@ -82,11 +61,17 @@ func (r *MessageRepository) FindNotificationsKeyset(
 	onlyType string,
 	pos *V1NotificationPos,
 	limit int,
+	hold quiet.Hold,
 ) ([]V1NotificationRow, error) {
 	q := r.db.Table("message").
 		Select("id, sender_id, link, content, status, type, created, item_count, actor_count, community_notification_id").
 		Where("receiver_id = ?", receiverID)
 	q = applyTypePartition(q, muted, mutedTypes)
+	if !muted {
+		if frag, args := quiet.HeldNotInSQL(hold, "message.id"); frag != "" {
+			q = q.Where(frag, args...)
+		}
+	}
 	if onlyType != "" {
 		q = q.Where("type = ?", onlyType)
 	}
@@ -101,9 +86,14 @@ func (r *MessageRepository) FindNotificationsKeyset(
 	return rows, err
 }
 
-func (r *MessageRepository) CountUnreadPartition(receiverID int, muted bool, mutedTypes []string) (int, error) {
+func (r *MessageRepository) CountUnreadPartition(receiverID int, muted bool, mutedTypes []string, hold quiet.Hold) (int, error) {
 	q := r.db.Table("message").Where("receiver_id = ? AND status = 'unread'", receiverID)
 	q = applyTypePartition(q, muted, mutedTypes)
+	if !muted {
+		if frag, args := quiet.HeldNotInSQL(hold, "message.id"); frag != "" {
+			q = q.Where(frag, args...)
+		}
+	}
 	var n int64
 	err := q.Count(&n).Error
 	return int(n), err
@@ -116,6 +106,7 @@ func (r *MessageRepository) MarkReadUpTo(
 	receiverID, upToID int,
 	muted bool,
 	mutedTypes []string,
+	hold quiet.Hold,
 ) (marked int, mirrorIDs []int64, unread int, err error) {
 	mirrorIDs = []int64{}
 	err = r.db.Transaction(func(tx *gorm.DB) error {
@@ -126,6 +117,17 @@ WHERE receiver_id = ? AND status = 'unread' AND id <= ?`
 		frag, extra := partitionSQL(muted, mutedTypes)
 		q += frag
 		args = append(args, extra...)
+		if !muted {
+			// The digest card and the rows it owns have their own read
+			// endpoint; the open-list marker must never swallow them.
+			q += `
+			AND type <> 'digest'
+			AND NOT EXISTS (
+				SELECT 1 FROM notification_digest_item mdi
+				JOIN notification_digest md ON md.id = mdi.digest_id
+				WHERE mdi.message_id = message.id AND md.status = 'unread'
+			)`
+		}
 		q += ` RETURNING community_notification_id`
 
 		rows, qerr := tx.Raw(q, args...).Rows()
@@ -154,6 +156,11 @@ WHERE receiver_id = ? AND status = 'unread' AND id <= ?`
 
 		cq := tx.Table("message").Where("receiver_id = ? AND status = 'unread'", receiverID)
 		cq = applyTypePartition(cq, muted, mutedTypes)
+		if !muted {
+			if heldFrag, heldArgs := quiet.HeldNotInSQL(hold, "message.id"); heldFrag != "" {
+				cq = cq.Where(heldFrag, heldArgs...)
+			}
+		}
 		var remaining int64
 		if cerr := cq.Count(&remaining).Error; cerr != nil {
 			return cerr

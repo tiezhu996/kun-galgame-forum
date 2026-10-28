@@ -39,6 +39,7 @@ type Jobs struct {
 	UserPurgeArchiveExpiry     func()
 	StickerPackRefresh         func()
 	NotificationRetention      func()
+	NotificationDigest         func()
 	TopicAISweep               func()
 }
 
@@ -133,6 +134,10 @@ func Start(
 
 	if jobs.NotificationRetention != nil {
 		schedule(c, "45 3 * * *", "已读通知过期清理", jobs.NotificationRetention)
+	}
+
+	if jobs.NotificationDigest != nil {
+		schedule(c, "0 8 * * *", "夜间通知摘要汇总", jobs.NotificationDigest)
 	}
 
 	if jobs.DlsiteCampaignRefresh != nil {

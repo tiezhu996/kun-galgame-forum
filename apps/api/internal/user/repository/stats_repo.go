@@ -3,6 +3,8 @@ package repository
 import (
 	"time"
 
+	"kun-galgame-api/internal/message/quiet"
+
 	"gorm.io/gorm"
 )
 
@@ -55,12 +57,15 @@ func (r *UserStatsRepository) ProfileCounts(userID int, todayStart time.Time) (L
 	return stats, err
 }
 
-func (r *UserStatsRepository) CountUnreadMessages(userID int, mutedLocal []string) (int64, error) {
+func (r *UserStatsRepository) CountUnreadMessages(userID int, mutedLocal []string, hold quiet.Hold) (int64, error) {
 	var count int64
 	q := r.db.Table("message").
 		Where("receiver_id = ? AND status = 'unread'", userID)
 	if len(mutedLocal) > 0 {
 		q = q.Not("type IN ?", mutedLocal)
+	}
+	if frag, args := quiet.HeldNotInSQL(hold, "message.id"); frag != "" {
+		q = q.Where(frag, args...)
 	}
 	err := q.Count(&count).Error
 	return count, err

@@ -568,6 +568,7 @@ func New(cfg *config.Config) *App {
 			UserPurgeArchiveExpiry:     expirePurgeArchive(adminPurgeRepo),
 			StickerPackRefresh:         stickerPackRefresh,
 			NotificationRetention:      expireReadNotifications(messageRepository, cfg.Notification.RetentionDays),
+			NotificationDigest:         buildNotificationDigests(messageRepository),
 			TopicAISweep:               topicAI.Sweep,
 		}),
 		StoreLinkStop:       storeLinks.Start(),

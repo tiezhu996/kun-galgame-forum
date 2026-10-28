@@ -53,7 +53,7 @@ var vocabularies = []vocabulary{
 	{"NewsLane", []string{"news", "column"}},
 	{"NewsSubmissionState", []string{"pending", "published", "rejected", "withdrawn"}},
 	{"NotificationOrigin", []string{"local", "community"}},
-	{"NotificationType", []string{"upvoted", "liked", "favorited", "replied", "commented", "mentioned", "followed_thread_activity", "best_answer_chosen", "reply_pinned", "quiz_answered", "resource_link_reported", "edit_requested", "edit_merged", "edit_declined", "lottery_won", "lottery_drawn", "lottery_code_expired", "poll_closed", "user_followed", "followee_topic_created", "followee_activity_published", "subscribed_topic_replied", "resource_relocated", "system_notice"}},
+	{"NotificationType", []string{"upvoted", "liked", "favorited", "replied", "commented", "mentioned", "followed_thread_activity", "best_answer_chosen", "reply_pinned", "quiz_answered", "resource_link_reported", "edit_requested", "edit_merged", "edit_declined", "lottery_won", "lottery_drawn", "lottery_code_expired", "poll_closed", "user_followed", "followee_topic_created", "followee_activity_published", "subscribed_topic_replied", "resource_relocated", "system_notice", "notification_digest"}},
 	{"NsfwDisplayMode", []string{"hide", "blur", "show"}},
 	{"PermissionEffect", []string{"grant", "revoke"}},
 	{"PermissionTargetRole", []string{"creator", "moderator", "admin"}},

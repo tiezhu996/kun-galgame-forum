@@ -4544,6 +4544,76 @@
         ],
         "type": "object"
       },
+      "DigestReadMarker": {
+        "properties": {
+          "marked_count": {
+            "description": "Member rows this request marked read. Zero on a replay.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "object": {
+            "const": "notification_digest_read_marker",
+            "description": "Type discriminant. Always notification_digest_read_marker.",
+            "maxLength": 31,
+            "type": "string"
+          },
+          "unread_count": {
+            "description": "Unread rows remaining in the unmuted partition after the mark, counted in SQL with the quiet-hours hold applied.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "object",
+          "marked_count",
+          "unread_count"
+        ],
+        "type": "object"
+      },
+      "DigestTopicGroup": {
+        "properties": {
+          "count": {
+            "description": "New replies folded into this group, summed item_count across its member rows.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "object": {
+            "const": "notification_digest_topic_group",
+            "description": "Type discriminant. Always notification_digest_topic_group.",
+            "maxLength": 31,
+            "type": "string"
+          },
+          "path": {
+            "description": "In-site path /topic/{topic_id}.",
+            "maxLength": 100,
+            "pattern": "^/",
+            "type": "string"
+          },
+          "topic_id": {
+            "description": "Topic id. JSON string of a decimal integer.",
+            "maxLength": 20,
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "topic_title": {
+            "description": "Title of that topic. Free text; never use it as a decision input. Empty string when the topic no longer exists; the client renders its own fallback while keeping the path.",
+            "maxLength": 233,
+            "type": "string"
+          }
+        },
+        "required": [
+          "object",
+          "topic_id",
+          "topic_title",
+          "path",
+          "count"
+        ],
+        "type": "object"
+      },
       "DirectMessage": {
         "properties": {
           "content": {
@@ -11048,6 +11118,74 @@
         ],
         "type": "object"
       },
+      "NotificationDigestDetail": {
+        "properties": {
+          "id": {
+            "description": "The digest notification's id; it is also a listable notification of notification_type notification_digest.",
+            "maxLength": 20,
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "is_read": {
+            "description": "Whether the digest (and the members it owned at mark time) has been marked read.",
+            "type": "boolean"
+          },
+          "object": {
+            "const": "notification_digest",
+            "description": "Type discriminant. Always notification_digest.",
+            "maxLength": 20,
+            "type": "string"
+          },
+          "other_items": {
+            "description": "Member notifications not rooted in a topic (likes, follows, system notices and similar), newest first. Rendered with the same notification shape as the list.",
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            },
+            "type": "array"
+          },
+          "topic_groups": {
+            "description": "One group per topic with new replies, most new replies first.",
+            "items": {
+              "$ref": "#/components/schemas/DigestTopicGroup"
+            },
+            "type": "array"
+          },
+          "total_count": {
+            "description": "Snapshot of every member's folded item count at build time, including types the caller muted afterwards. topic_groups and other_items only render the types currently unmuted.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "window_end_at": {
+            "description": "End of the covered quiet window (08:00 Asia/Shanghai), exclusive.",
+            "format": "date-time",
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+            "type": "string"
+          },
+          "window_start_at": {
+            "description": "Start of the covered quiet window (23:00 Asia/Shanghai), inclusive.",
+            "format": "date-time",
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "object",
+          "id",
+          "is_read",
+          "window_start_at",
+          "window_end_at",
+          "total_count",
+          "topic_groups",
+          "other_items"
+        ],
+        "type": "object"
+      },
       "NotificationOrigin": {
         "enum": [
           "local",
@@ -11059,6 +11197,10 @@
       },
       "NotificationPreferences": {
         "properties": {
+          "is_quiet_hours_enabled": {
+            "description": "Whether nightly quiet hours are on. When true, ordinary notifications created between 23:00 and 08:00 Asia/Shanghai are held into one morning digest instead of lighting the unread badge at night. The window is fixed and cannot be customized. Direct messages are never held.",
+            "type": "boolean"
+          },
           "muted_types": {
             "description": "Notification types the caller has muted. Empty array if none.",
             "items": {
@@ -11078,7 +11220,8 @@
         },
         "required": [
           "object",
-          "muted_types"
+          "muted_types",
+          "is_quiet_hours_enabled"
         ],
         "type": "object"
       },
@@ -11206,7 +11349,8 @@
           "followee_activity_published",
           "subscribed_topic_replied",
           "resource_relocated",
-          "system_notice"
+          "system_notice",
+          "notification_digest"
         ],
         "maxLength": 27,
         "type": "string",
@@ -13384,6 +13528,10 @@
       },
       "PutNotificationPreferencesBody": {
         "properties": {
+          "is_quiet_hours_enabled": {
+            "description": "Whether nightly quiet hours (23:00-08:00 Asia/Shanghai) are on. Optional: when the field is absent the stored value is kept, so older clients that only write muted_types keep working.",
+            "type": "boolean"
+          },
           "muted_types": {
             "description": "Notification types to mute, replacing the stored set. Empty array mutes nothing.",
             "items": {
@@ -45987,7 +46135,7 @@
     },
     "/me/notification-preferences": {
       "get": {
-        "description": "Returns the notification types the caller has muted. Unknown stored values are dropped. An account with no forum state returns an empty list.",
+        "description": "Returns the notification types the caller has muted and is_quiet_hours_enabled. Unknown stored values are dropped. An account with no forum state returns an empty muted list and is_quiet_hours_enabled true (the default).",
         "operationId": "getNotificationPreferences",
         "responses": {
           "200": {
@@ -46049,13 +46197,13 @@
             "bearer": []
           }
         ],
-        "summary": "Get the caller's muted notification types",
+        "summary": "Get the caller's notification preferences",
         "tags": [
           "users"
         ]
       },
       "put": {
-        "description": "Replaces the notification types the caller has muted. Unknown tokens are refused. The stored values are the forum's database keys; the response uses the same v1 tokens as the request.",
+        "description": "Replaces the notification types the caller has muted and, when is_quiet_hours_enabled is present, that flag in one write. Unknown tokens are refused. An absent is_quiet_hours_enabled keeps the stored value, so clients predating the field keep working. The flag controls the fixed 23:00-08:00 Asia/Shanghai quiet window and the change applies to the current window immediately. The stored values are the forum's database keys; the response uses the same v1 tokens as the request.",
         "operationId": "putNotificationPreferences",
         "requestBody": {
           "content": {
@@ -46167,7 +46315,7 @@
             "bearer": []
           }
         ],
-        "summary": "Replace the caller's muted notification types",
+        "summary": "Replace the caller's notification preferences",
         "tags": [
           "users"
         ]
@@ -46499,6 +46647,214 @@
           }
         ],
         "summary": "List the caller's notifications",
+        "tags": [
+          "messages"
+        ]
+      }
+    },
+    "/me/notifications/digests/{digest_id}": {
+      "get": {
+        "description": "Returns one digest by the id of its digest notification (the notification_digest row from listNotifications). topic_groups aggregates the night's topic-rooted replies by topic with folded counts, most new replies first; a missing topic keeps its path and uses a fallback title. other_items are non-topic member notifications in the ordinary notification shape, newest first. Members whose type the caller has muted after the digest was built are omitted from both groups; they stay unread in the muted partition. A missing id or another user's digest is NOT_FOUND.",
+        "operationId": "getNotificationDigest",
+        "parameters": [
+          {
+            "description": "The digest notification's id.",
+            "in": "path",
+            "name": "digest_id",
+            "required": true,
+            "schema": {
+              "description": "The digest notification's id.",
+              "maxLength": 19,
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationDigestDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND when the digest does not exist or belongs to another user."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get one morning notification digest",
+        "tags": [
+          "messages"
+        ]
+      }
+    },
+    "/me/notifications/digests/{digest_id}/read": {
+      "put": {
+        "description": "Marks the digest notification and every member row whose type the caller currently has not muted as read in one transaction; the digest card and those members then appear as ordinary read notifications. Community-mirrored members marked here are forwarded upstream by id, never with {all:true}. Members muted after the build keep their own lifecycle in the muted partition and are not touched. Replaying on an already-read digest answers 200 with marked_count 0. A missing id or another user's digest is NOT_FOUND.",
+        "operationId": "markNotificationDigestRead",
+        "parameters": [
+          {
+            "description": "The digest notification's id.",
+            "in": "path",
+            "name": "digest_id",
+            "required": true,
+            "schema": {
+              "description": "The digest notification's id.",
+              "maxLength": 19,
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DigestReadMarker"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND when the digest does not exist or belongs to another user."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark one digest and its member notifications read",
         "tags": [
           "messages"
         ]

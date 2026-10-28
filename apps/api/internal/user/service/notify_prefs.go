@@ -27,6 +27,24 @@ func (s *UserService) ReplaceMutedNotificationTypes(userID int, dbKeys []string)
 	return s.stateRepo.UpdateMutedTypes(userID, dbKeys)
 }
 
+func (s *UserService) QuietHoursEnabled(userID int) (bool, error) {
+	state, err := s.stateRepo.FindByID(userID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return state.QuietHoursEnabled, nil
+}
+
+func (s *UserService) ReplaceNotificationPreferences(userID int, dbKeys []string, quietHoursEnabled bool) error {
+	if err := s.stateRepo.Ensure(userID); err != nil {
+		return err
+	}
+	return s.stateRepo.UpdateNotificationPrefs(userID, dbKeys, quietHoursEnabled)
+}
+
 func (s *UserService) SetMutedNotificationType(userID int, dbKey string, muted bool) ([]string, error) {
 	if err := s.stateRepo.Ensure(userID); err != nil {
 		return nil, err

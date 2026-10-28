@@ -84,6 +84,37 @@ func Register(svc *Service) func(huma.API) {
 		}), svc.getNotification)
 
 		huma.Register(api, v1.Required(huma.Operation{
+			OperationID: "getNotificationDigest",
+			Method:      http.MethodGet,
+			Path:        "/me/notifications/digests/{digest_id}",
+			Summary:     "Get one morning notification digest",
+			Description: "Returns one digest by the id of its digest notification (the notification_digest row from listNotifications). " +
+				"topic_groups aggregates the night's topic-rooted replies by topic with folded counts, most new replies first; a missing topic keeps its path and uses a fallback title. " +
+				"other_items are non-topic member notifications in the ordinary notification shape, newest first. " +
+				"Members whose type the caller has muted after the digest was built are omitted from both groups; they stay unread in the muted partition. " +
+				"A missing id or another user's digest is NOT_FOUND.",
+			Tags: []string{"messages"},
+			Responses: problemResponses(map[int]string{
+				404: "NOT_FOUND when the digest does not exist or belongs to another user.",
+			}),
+		}), svc.getNotificationDigest)
+
+		huma.Register(api, v1.Required(huma.Operation{
+			OperationID:   "markNotificationDigestRead",
+			Method:        http.MethodPut,
+			Path:          "/me/notifications/digests/{digest_id}/read",
+			Summary:       "Mark one digest and its member notifications read",
+			DefaultStatus: http.StatusOK,
+			Description: "Marks the digest notification and every member row whose type the caller currently has not muted as read in one transaction; the digest card and those members then appear as ordinary read notifications. " +
+				"Community-mirrored members marked here are forwarded upstream by id, never with {all:true}. Members muted after the build keep their own lifecycle in the muted partition and are not touched. " +
+				"Replaying on an already-read digest answers 200 with marked_count 0. A missing id or another user's digest is NOT_FOUND.",
+			Tags: []string{"messages"},
+			Responses: problemResponses(map[int]string{
+				404: "NOT_FOUND when the digest does not exist or belongs to another user.",
+			}),
+		}), svc.markNotificationDigestRead)
+
+		huma.Register(api, v1.Required(huma.Operation{
 			OperationID: "listConversations",
 			Method:      http.MethodGet,
 			Path:        "/me/conversations",

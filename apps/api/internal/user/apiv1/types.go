@@ -157,7 +157,7 @@ type UserCounts struct {
 type MutedType string
 
 func (MutedType) Schema(huma.Registry) *huma.Schema {
-	types := notifytype.All()
+	types := notifytype.AllMutable()
 	values := make([]string, 0, len(types)+1)
 	for _, t := range types {
 		values = append(values, string(t))
@@ -169,6 +169,7 @@ func (MutedType) Schema(huma.Registry) *huma.Schema {
 }
 
 type NotificationPreferences struct {
-	Object     string      `json:"object" enum:"notification_preferences" maxLength:"24" doc:"Type discriminant. Always notification_preferences."`
-	MutedTypes []MutedType `json:"muted_types" maxItems:"25" uniqueItems:"true" doc:"Notification types the caller has muted. Empty array if none."`
+	Object            string      `json:"object" enum:"notification_preferences" maxLength:"24" doc:"Type discriminant. Always notification_preferences."`
+	MutedTypes        []MutedType `json:"muted_types" maxItems:"25" uniqueItems:"true" doc:"Notification types the caller has muted. Empty array if none."`
+	IsQuietHoursEnabled bool        `json:"is_quiet_hours_enabled" doc:"Whether nightly quiet hours are on. When true, ordinary notifications created between 23:00 and 08:00 Asia/Shanghai are held into one morning digest instead of lighting the unread badge at night. The window is fixed and cannot be customized. Direct messages are never held."`
 }

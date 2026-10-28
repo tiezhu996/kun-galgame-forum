@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"kun-galgame-api/internal/message/model"
+	"kun-galgame-api/internal/message/quiet"
 	"kun-galgame-api/internal/testdb"
 )
 
@@ -179,7 +180,7 @@ func TestMarkReadUpToReturnsMirroredIDs(t *testing.T) {
 		t.Fatalf("insert local: %v", err)
 	}
 
-	marked, ids, unreadLeft, err := repo.MarkReadUpTo(receiver, math.MaxInt32, false, nil)
+	marked, ids, unreadLeft, err := repo.MarkReadUpTo(receiver, math.MaxInt32, false, nil, quiet.NoHold())
 	if err != nil {
 		t.Fatalf("MarkReadUpTo: %v", err)
 	}

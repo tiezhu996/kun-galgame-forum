@@ -1,13 +1,16 @@
 package app
 
 import (
+	"context"
 	"log/slog"
 	"time"
 
 	"kun-galgame-api/internal/apiv1"
 	"kun-galgame-api/internal/apiv1/content"
 	messageapiv1 "kun-galgame-api/internal/message/apiv1"
+	"kun-galgame-api/internal/message/quiet"
 	msgRepo "kun-galgame-api/internal/message/repository"
+	msgService "kun-galgame-api/internal/message/service"
 )
 
 func (a *App) newMessageV1() *messageapiv1.Service {
@@ -31,6 +34,20 @@ func (a *App) newMessageV1() *messageapiv1.Service {
 		}
 	}
 	return messageapiv1.New(messages, chats, a.UserClient, convert, cdn, a.Messages, a.Config != nil && a.Config.Chat.Enabled)
+}
+
+func buildNotificationDigests(repo *msgRepo.MessageRepository) func() {
+	return func() {
+		start, _ := quiet.LastEndedWindow(time.Now())
+		stats, err := msgService.NewDigestBuilder(repo).BuildWindow(context.Background(), start)
+		if err != nil {
+			slog.Error("夜间通知摘要汇总失败", "window_start", start, "error", err)
+			return
+		}
+		slog.Info("夜间通知摘要汇总完成",
+			"window_start", start, "users_scanned", stats.UsersScanned,
+			"digests", stats.Digests, "new_digests", stats.NewDigests)
+	}
 }
 
 func expireReadNotifications(repo *msgRepo.MessageRepository, days int) func() {

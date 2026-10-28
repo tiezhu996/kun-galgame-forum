@@ -17,6 +17,7 @@ var LocalNotificationTypes = []string{
 	string(NotifySubscribedTopic),
 	string(NotifyResourceRelocated),
 	string(NotifySystemNotice),
+	"digest",
 }
 
 func SplitMuted(muted []string) (local []string, chatMuted bool) {

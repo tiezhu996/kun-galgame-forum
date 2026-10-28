@@ -81,7 +81,7 @@ func (s *Service) listNotifications(ctx context.Context, in *listNotificationsIn
 	if p != nil {
 		return nil, p
 	}
-	mutedTypes, _, p := s.mutedTypes(user.ID)
+	mutedTypes, _, hold, p := s.notificationSettings(user.ID)
 	if p != nil {
 		return nil, p
 	}
@@ -119,7 +119,7 @@ func (s *Service) listNotifications(ctx context.Context, in *listNotificationsIn
 		if rem := maxScan - scanned; rem < batch {
 			batch = rem
 		}
-		rows, err := s.messages.FindNotificationsKeyset(user.ID, in.IsMuted, mutedTypes, onlyType, pos, batch)
+		rows, err := s.messages.FindNotificationsKeyset(user.ID, in.IsMuted, mutedTypes, onlyType, pos, batch, hold)
 		if err != nil {
 			return nil, problem.Internal(err)
 		}
@@ -175,7 +175,7 @@ func (s *Service) getNotificationSummary(ctx context.Context, _ *getNotification
 	if p != nil {
 		return nil, p
 	}
-	mutedTypes, chatMuted, p := s.mutedTypes(user.ID)
+	mutedTypes, chatMuted, hold, p := s.notificationSettings(user.ID)
 	if p != nil {
 		return nil, p
 	}
@@ -183,16 +183,16 @@ func (s *Service) getNotificationSummary(ctx context.Context, _ *getNotification
 	if p != nil {
 		return nil, p
 	}
-	unread, err := s.messages.CountUnreadPartition(user.ID, false, mutedTypes)
+	unread, err := s.messages.CountUnreadPartition(user.ID, false, mutedTypes, hold)
 	if err != nil {
 		return nil, problem.Internal(err)
 	}
-	mutedUnread, err := s.messages.CountUnreadPartition(user.ID, true, mutedTypes)
+	mutedUnread, err := s.messages.CountUnreadPartition(user.ID, true, mutedTypes, hold)
 	if err != nil {
 		return nil, problem.Internal(err)
 	}
 
-	rows, err := s.messages.FindNotificationsKeyset(user.ID, false, mutedTypes, "", nil, pageRefillFactor)
+	rows, err := s.messages.FindNotificationsKeyset(user.ID, false, mutedTypes, "", nil, pageRefillFactor, hold)
 	if err != nil {
 		return nil, problem.Internal(err)
 	}
@@ -230,11 +230,11 @@ func (s *Service) markNotificationsRead(ctx context.Context, in *markNotificatio
 	if p != nil {
 		return nil, p
 	}
-	mutedTypes, _, p := s.mutedTypes(user.ID)
+	mutedTypes, _, hold, p := s.notificationSettings(user.ID)
 	if p != nil {
 		return nil, p
 	}
-	marked, ids, unread, err := s.messages.MarkReadUpTo(user.ID, upTo, in.Body.IsMuted, mutedTypes)
+	marked, ids, unread, err := s.messages.MarkReadUpTo(user.ID, upTo, in.Body.IsMuted, mutedTypes, hold)
 	if err != nil {
 		return nil, problem.Internal(err)
 	}

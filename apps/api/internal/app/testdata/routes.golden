@@ -131,6 +131,7 @@ GET    /api/v1/me/news-submissions/:news_submission_id cors.New → v1Headers �
 GET    /api/v1/me/notification-preferences            cors.New → v1Headers → fiberAdapter.Handle
 GET    /api/v1/me/notifications                       cors.New → v1Headers → fiberAdapter.Handle
 GET    /api/v1/me/notifications/:notification_id      cors.New → v1Headers → fiberAdapter.Handle
+GET    /api/v1/me/notifications/digests/:digest_id    cors.New → v1Headers → fiberAdapter.Handle
 GET    /api/v1/me/notifications/summary               cors.New → v1Headers → fiberAdapter.Handle
 GET    /api/v1/me/permissions                         cors.New → v1Headers → fiberAdapter.Handle
 GET    /api/v1/me/playtimes                           cors.New → v1Headers → fiberAdapter.Handle
@@ -359,6 +360,7 @@ PUT    /api/v1/me/following-activities/read-marker    cors.New → v1Headers →
 PUT    /api/v1/me/following/:user_id                  cors.New → v1Headers → fiberAdapter.Handle
 PUT    /api/v1/me/notification-preferences            cors.New → v1Headers → fiberAdapter.Handle
 PUT    /api/v1/me/notification-preferences/muted-types/:muted_type cors.New → v1Headers → fiberAdapter.Handle
+PUT    /api/v1/me/notifications/digests/:digest_id/read cors.New → v1Headers → fiberAdapter.Handle
 PUT    /api/v1/me/notifications/read-marker           cors.New → v1Headers → fiberAdapter.Handle
 PUT    /api/v1/me/nsfw-display                        cors.New → v1Headers → fiberAdapter.Handle
 PUT    /api/v1/me/preferences                         cors.New → v1Headers → fiberAdapter.Handle

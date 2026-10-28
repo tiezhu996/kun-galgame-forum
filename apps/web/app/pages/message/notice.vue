@@ -43,6 +43,15 @@ const removeNotification = (id: string) => {
   items.value = items.value.filter((notification) => notification.id !== id)
 }
 
+// Digests own their own read action: the open-list marker skips them on the
+// server, and they must never be swallowed by this page's mark-on-open.
+const ordinaryItems = computed(() =>
+  items.value.filter(
+    (notification) =>
+      notification.notification_type !== 'notification_digest'
+  )
+)
+
 const markLoadedRead = async () => {
   if (didMarkRead.value || !import.meta.client) {
     return
@@ -50,10 +59,12 @@ const markLoadedRead = async () => {
   if (status.value === 'pending' || status.value === 'idle') {
     return
   }
-  if (!items.value.some((notification) => !notification.is_read)) {
+  if (!ordinaryItems.value.some((notification) => !notification.is_read)) {
     return
   }
-  const upTo = maxDecimalId(items.value.map((notification) => notification.id))
+  const upTo = maxDecimalId(
+    ordinaryItems.value.map((notification) => notification.id)
+  )
   if (!upTo) {
     return
   }
@@ -135,12 +146,23 @@ onMounted(() => {
 
     <template v-else-if="items.length">
       <KunOverlayScroll class="h-full">
-        <MessageAsideNotice
-          v-for="notification in items"
-          :key="notification.id"
-          :notification="notification"
-          @deleted="removeNotification(notification.id)"
-        />
+        <div class="space-y-1">
+          <MessageAsideDigestCard
+            v-for="notification in items.filter(
+              (item) => item.notification_type === 'notification_digest'
+            )"
+            :key="notification.id"
+            :notification="notification"
+          />
+          <MessageAsideNotice
+            v-for="notification in items.filter(
+              (item) => item.notification_type !== 'notification_digest'
+            )"
+            :key="notification.id"
+            :notification="notification"
+            @deleted="removeNotification(notification.id)"
+          />
+        </div>
       </KunOverlayScroll>
 
       <div v-if="hasMore" class="flex justify-center pt-2">

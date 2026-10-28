@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"kun-galgame-api/internal/message/quiet"
 	msgService "kun-galgame-api/internal/message/service"
 	"kun-galgame-api/pkg/role"
 )
@@ -28,7 +30,8 @@ func (s *UserService) Me(ctx context.Context, userID int, countDirectMessages bo
 	}
 
 	localMuted, chatMuted := msgService.SplitMuted(state.MutedNotificationTypes)
-	unreadMessage, err := s.userStatsRepo.CountUnreadMessages(userID, localMuted)
+	hold := quiet.At(time.Now(), state.QuietHoursEnabled)
+	unreadMessage, err := s.userStatsRepo.CountUnreadMessages(userID, localMuted, hold)
 	if err != nil {
 		return nil, err
 	}

@@ -151,7 +151,7 @@ func TestV1PutNotificationPreferencesTakesTheWholeVocabulary(t *testing.T) {
 		f.db.Exec(`UPDATE kungal_user_state SET muted_notification_types = '[]' WHERE user_id = ?`, w3UserAlice)
 	})
 	all := []string{notifytype.KeyChat}
-	for _, tok := range notifytype.All() {
+	for _, tok := range notifytype.AllMutable() {
 		all = append(all, string(tok))
 	}
 	resp, body := f.putMuted(t, "sess-alice", all)

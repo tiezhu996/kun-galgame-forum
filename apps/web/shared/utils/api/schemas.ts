@@ -100,6 +100,11 @@ export type NotificationSummary = components['schemas']['NotificationSummary']
 export type NotificationType = Notification['notification_type']
 export type NotificationPreferences =
   components['schemas']['NotificationPreferences']
+export type NotificationDigestDetail =
+  components['schemas']['NotificationDigestDetail']
+export type DigestTopicGroup = components['schemas']['DigestTopicGroup']
+export type DigestReadMarker =
+  components['schemas']['DigestReadMarker']
 export type Conversation = components['schemas']['Conversation']
 export type DirectMessage = components['schemas']['DirectMessage']
 

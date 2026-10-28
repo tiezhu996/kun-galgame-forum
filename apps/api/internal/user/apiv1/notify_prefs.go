@@ -17,7 +17,8 @@ type putNotificationPreferencesInput struct {
 }
 
 type putNotificationPreferencesBody struct {
-	MutedTypes []MutedType `json:"muted_types" maxItems:"25" uniqueItems:"true" doc:"Notification types to mute, replacing the stored set. Empty array mutes nothing."`
+	MutedTypes        []MutedType `json:"muted_types" maxItems:"25" uniqueItems:"true" doc:"Notification types to mute, replacing the stored set. Empty array mutes nothing."`
+	IsQuietHoursEnabled *bool       `json:"is_quiet_hours_enabled,omitempty" doc:"Whether nightly quiet hours (23:00-08:00 Asia/Shanghai) are on. Optional: when the field is absent the stored value is kept, so older clients that only write muted_types keep working."`
 }
 
 type putNotificationPreferencesOutput struct {
@@ -36,9 +37,14 @@ func (s *Users) getNotificationPreferences(ctx context.Context, _ *struct{}) (*g
 	if err != nil {
 		return nil, problem.Internal(err)
 	}
+	quiet, err := s.users.QuietHoursEnabled(user.ID)
+	if err != nil {
+		return nil, problem.Internal(err)
+	}
 	return &getNotificationPreferencesOutput{Body: NotificationPreferences{
-		Object:     "notification_preferences",
-		MutedTypes: mutedFromStored(stored),
+		Object:              "notification_preferences",
+		MutedTypes:          mutedFromStored(stored),
+		IsQuietHoursEnabled: quiet,
 	}}, nil
 }
 
@@ -51,12 +57,21 @@ func (s *Users) putNotificationPreferences(ctx context.Context, in *putNotificat
 		return nil, problem.New(problem.CodeInvalidCredential, "The credential is invalid, expired, or revoked.")
 	}
 	stored := mutedToStored(in.Body.MutedTypes)
-	if err := s.users.ReplaceMutedNotificationTypes(user.ID, stored); err != nil {
+	quiet := in.Body.IsQuietHoursEnabled
+	if quiet == nil {
+		current, err := s.users.QuietHoursEnabled(user.ID)
+		if err != nil {
+			return nil, problem.Internal(err)
+		}
+		quiet = &current
+	}
+	if err := s.users.ReplaceNotificationPreferences(user.ID, stored, *quiet); err != nil {
 		return nil, problem.Internal(err)
 	}
 	return &putNotificationPreferencesOutput{Body: NotificationPreferences{
-		Object:     "notification_preferences",
-		MutedTypes: mutedFromStored(stored),
+		Object:              "notification_preferences",
+		MutedTypes:          mutedFromStored(stored),
+		IsQuietHoursEnabled: *quiet,
 	}}, nil
 }
 
@@ -84,9 +99,14 @@ func (s *Users) setMutedType(ctx context.Context, tok MutedType, muted bool) (*p
 	if err != nil {
 		return nil, problem.Internal(err)
 	}
+	quiet, err := s.users.QuietHoursEnabled(user.ID)
+	if err != nil {
+		return nil, problem.Internal(err)
+	}
 	return &putNotificationPreferencesOutput{Body: NotificationPreferences{
-		Object:     "notification_preferences",
-		MutedTypes: mutedFromStored(stored),
+		Object:              "notification_preferences",
+		MutedTypes:          mutedFromStored(stored),
+		IsQuietHoursEnabled: quiet,
 	}}, nil
 }
 

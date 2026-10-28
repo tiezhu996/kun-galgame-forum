@@ -31,6 +31,7 @@ const (
 	SubscribedTopicReplied    Type = "subscribed_topic_replied"
 	ResourceRelocated         Type = "resource_relocated"
 	SystemNotice              Type = "system_notice"
+	DigestNotification        Type = "notification_digest"
 )
 
 const KeyChat = "chat"
@@ -60,6 +61,7 @@ var all = []Type{
 	SubscribedTopicReplied,
 	ResourceRelocated,
 	SystemNotice,
+	DigestNotification,
 }
 
 var toDB = map[Type]string{
@@ -87,6 +89,7 @@ var toDB = map[Type]string{
 	SubscribedTopicReplied:    "subscribed-topic",
 	ResourceRelocated:         "resource-relocated",
 	SystemNotice:              "notice",
+	DigestNotification:        "digest",
 }
 
 var fromDB = func() map[string]Type {
@@ -100,6 +103,19 @@ var fromDB = func() map[string]Type {
 func All() []Type {
 	out := make([]Type, len(all))
 	copy(out, all)
+	return out
+}
+
+// AllMutable lists the types a user is allowed to mute. The morning digest
+// is system-owned and cannot be silenced through the muted-types preference.
+func AllMutable() []Type {
+	out := make([]Type, 0, len(all))
+	for _, t := range all {
+		if t == DigestNotification {
+			continue
+		}
+		out = append(out, t)
+	}
 	return out
 }
 

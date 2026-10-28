@@ -2200,13 +2200,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get the caller's muted notification types
-         * @description Returns the notification types the caller has muted. Unknown stored values are dropped. An account with no forum state returns an empty list.
+         * Get the caller's notification preferences
+         * @description Returns the notification types the caller has muted and is_quiet_hours_enabled. Unknown stored values are dropped. An account with no forum state returns an empty muted list and is_quiet_hours_enabled true (the default).
          */
         get: operations["getNotificationPreferences"];
         /**
-         * Replace the caller's muted notification types
-         * @description Replaces the notification types the caller has muted. Unknown tokens are refused. The stored values are the forum's database keys; the response uses the same v1 tokens as the request.
+         * Replace the caller's notification preferences
+         * @description Replaces the notification types the caller has muted and, when is_quiet_hours_enabled is present, that flag in one write. Unknown tokens are refused. An absent is_quiet_hours_enabled keeps the stored value, so clients predating the field keep working. The flag controls the fixed 23:00-08:00 Asia/Shanghai quiet window and the change applies to the current window immediately. The stored values are the forum's database keys; the response uses the same v1 tokens as the request.
          */
         put: operations["putNotificationPreferences"];
         post?: never;
@@ -2253,6 +2253,46 @@ export interface paths {
          */
         get: operations["listNotifications"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/notifications/digests/{digest_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one morning notification digest
+         * @description Returns one digest by the id of its digest notification (the notification_digest row from listNotifications). topic_groups aggregates the night's topic-rooted replies by topic with folded counts, most new replies first; a missing topic keeps its path and uses a fallback title. other_items are non-topic member notifications in the ordinary notification shape, newest first. Members whose type the caller has muted after the digest was built are omitted from both groups; they stay unread in the muted partition. A missing id or another user's digest is NOT_FOUND.
+         */
+        get: operations["getNotificationDigest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/notifications/digests/{digest_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mark one digest and its member notifications read
+         * @description Marks the digest notification and every member row whose type the caller currently has not muted as read in one transaction; the digest card and those members then appear as ordinary read notifications. Community-mirrored members marked here are forwarded upstream by id, never with {all:true}. Members muted after the build keep their own lifecycle in the muted partition and are not touched. Replaying on an already-read digest answers 200 with marked_count 0. A missing id or another user's digest is NOT_FOUND.
+         */
+        put: operations["markNotificationDigestRead"];
         post?: never;
         delete?: never;
         options?: never;
@@ -7483,6 +7523,41 @@ export interface components {
              */
             day: number;
         };
+        DigestReadMarker: {
+            /**
+             * Format: int64
+             * @description Member rows this request marked read. Zero on a replay.
+             */
+            marked_count: number;
+            /**
+             * @description Type discriminant. Always notification_digest_read_marker.
+             * @constant
+             */
+            object: "notification_digest_read_marker";
+            /**
+             * Format: int64
+             * @description Unread rows remaining in the unmuted partition after the mark, counted in SQL with the quiet-hours hold applied.
+             */
+            unread_count: number;
+        };
+        DigestTopicGroup: {
+            /**
+             * Format: int64
+             * @description New replies folded into this group, summed item_count across its member rows.
+             */
+            count: number;
+            /**
+             * @description Type discriminant. Always notification_digest_topic_group.
+             * @constant
+             */
+            object: "notification_digest_topic_group";
+            /** @description In-site path /topic/{topic_id}. */
+            path: string;
+            /** @description Topic id. JSON string of a decimal integer. */
+            topic_id: string;
+            /** @description Title of that topic. Free text; never use it as a decision input. Empty string when the topic no longer exists; the client renders its own fallback while keeping the path. */
+            topic_title: string;
+        };
         DirectMessage: {
             /** @description Message body as a node tree. An empty document (children is an empty array) when state is recalled; clients read state, not emptiness. */
             content: components["schemas"]["ContentDocument"];
@@ -9870,9 +9945,41 @@ export interface components {
             /** @description In-site web path of the target, stored as the legacy link. Always starts with a slash. For resource_relocated it is the old page of a resource that moved to LetMoe, which redirects to its new address there. For system_notice it is where the notice points, /shop for an offer back on sale. */
             path: string;
         };
+        NotificationDigestDetail: {
+            /** @description The digest notification's id; it is also a listable notification of notification_type notification_digest. */
+            id: string;
+            /** @description Whether the digest (and the members it owned at mark time) has been marked read. */
+            is_read: boolean;
+            /**
+             * @description Type discriminant. Always notification_digest.
+             * @constant
+             */
+            object: "notification_digest";
+            /** @description Member notifications not rooted in a topic (likes, follows, system notices and similar), newest first. Rendered with the same notification shape as the list. */
+            other_items: components["schemas"]["Notification"][];
+            /** @description One group per topic with new replies, most new replies first. */
+            topic_groups: components["schemas"]["DigestTopicGroup"][];
+            /**
+             * Format: int64
+             * @description Snapshot of every member's folded item count at build time, including types the caller muted afterwards. topic_groups and other_items only render the types currently unmuted.
+             */
+            total_count: number;
+            /**
+             * Format: date-time
+             * @description End of the covered quiet window (08:00 Asia/Shanghai), exclusive.
+             */
+            window_end_at: string;
+            /**
+             * Format: date-time
+             * @description Start of the covered quiet window (23:00 Asia/Shanghai), inclusive.
+             */
+            window_start_at: string;
+        };
         /** @enum {string} */
         NotificationOrigin: "local" | "community";
         NotificationPreferences: {
+            /** @description Whether nightly quiet hours are on. When true, ordinary notifications created between 23:00 and 08:00 Asia/Shanghai are held into one morning digest instead of lighting the unread badge at night. The window is fixed and cannot be customized. Direct messages are never held. */
+            is_quiet_hours_enabled: boolean;
             /** @description Notification types the caller has muted. Empty array if none. */
             muted_types: components["schemas"]["MutedType"][];
             /**
@@ -9931,7 +10038,7 @@ export interface components {
             unread_count: number;
         };
         /** @enum {string} */
-        NotificationType: "upvoted" | "liked" | "favorited" | "replied" | "commented" | "mentioned" | "followed_thread_activity" | "best_answer_chosen" | "reply_pinned" | "quiz_answered" | "resource_link_reported" | "edit_requested" | "edit_merged" | "edit_declined" | "lottery_won" | "lottery_drawn" | "lottery_code_expired" | "poll_closed" | "user_followed" | "followee_topic_created" | "followee_activity_published" | "subscribed_topic_replied" | "resource_relocated" | "system_notice";
+        NotificationType: "upvoted" | "liked" | "favorited" | "replied" | "commented" | "mentioned" | "followed_thread_activity" | "best_answer_chosen" | "reply_pinned" | "quiz_answered" | "resource_link_reported" | "edit_requested" | "edit_merged" | "edit_declined" | "lottery_won" | "lottery_drawn" | "lottery_code_expired" | "poll_closed" | "user_followed" | "followee_topic_created" | "followee_activity_published" | "subscribed_topic_replied" | "resource_relocated" | "system_notice" | "notification_digest";
         NsfwDisplay: {
             /** @description How adult content is shown: hide, blur, or show. */
             nsfw_display: components["schemas"]["NsfwDisplayMode"];
@@ -10847,6 +10954,8 @@ export interface components {
         /** @enum {string} */
         Purpose: "content" | "message";
         PutNotificationPreferencesBody: {
+            /** @description Whether nightly quiet hours (23:00-08:00 Asia/Shanghai) are on. Optional: when the field is absent the stored value is kept, so older clients that only write muted_types keep working. */
+            is_quiet_hours_enabled?: boolean;
             /** @description Notification types to mute, replacing the stored set. Empty array mutes nothing. */
             muted_types: components["schemas"]["MutedType"][];
         };
@@ -28870,6 +28979,160 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getNotificationDigest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The digest notification's id. */
+                digest_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationDigestDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description NOT_FOUND when the digest does not exist or belongs to another user. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    markNotificationDigestRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The digest notification's id. */
+                digest_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DigestReadMarker"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description NOT_FOUND when the digest does not exist or belongs to another user. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
