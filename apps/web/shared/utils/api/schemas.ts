@@ -164,6 +164,11 @@ export type WebsiteEngagement = components['schemas']['WebsiteEngagement']
 export type AdminWebsite = components['schemas']['AdminWebsite']
 export type WebsiteCreate = components['schemas']['WebsiteCreate']
 export type WebsitePatch = components['schemas']['WebsitePatch']
+export type WebsiteMergeRequest =
+  components['schemas']['WebsiteMergeRequest']
+export type WebsiteMergePreview =
+  components['schemas']['WebsiteMergePreview']
+export type WebsiteMerge = components['schemas']['WebsiteMerge']
 
 export type DocSummary = components['schemas']['DocSummary']
 export type Doc = components['schemas']['Doc']

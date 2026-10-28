@@ -576,6 +576,46 @@ export interface paths {
         patch: operations["updateAdminWebsiteCategory"];
         trace?: never;
     };
+    "/admin/website-merges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge one website into another
+         * @description Folds source_website_id into target_website_id in one transaction: likes, favorites and movable tags move to the survivor with overlaps counted once, counters and views are recomputed, feed cards and notifications linking the old host are rewritten, the source row is deleted, and its host begins answering ENTITY_MERGED with the survivor. Replaying the same source and target after the fold returns the stored result and writes nothing; a source already folded into a different survivor is ALREADY_EXISTS. Needs website.delete. Requests authenticated with a Bearer token never carry website permissions. The caller is checked against the account service's current record first: a banned account is ACCOUNT_BANNED, and a failure of that lookup is SERVICE_UNAVAILABLE with nothing written.
+         */
+        post: operations["createAdminWebsiteMerge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/website-merges/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview merging one website into another
+         * @description Computes, without writing anything, how source_website_id would fold into target_website_id: likes and favorites a same user holds on both overlap and count once, tags move as a union except a tag of a single-select group when the survivor already carries a tag of that group, the source's extra urls are appended once, view and cached comment counts add, and r18 moves only up onto the survivor. Needs website.delete. Requests authenticated with a Bearer token never carry website permissions. The caller is checked against the account service's current record first: a banned account is ACCOUNT_BANNED, and a failure of that lookup is SERVICE_UNAVAILABLE with nothing written. The source's community comments stay on their own anchor and are read through the survivor page after the fold.
+         */
+        post: operations["previewAdminWebsiteMerge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/website-tag-groups": {
         parameters: {
             query?: never;
@@ -5362,7 +5402,7 @@ export interface paths {
         };
         /**
          * Get a website by its host
-         * @description Returns the website whose main host is website_host and counts one view. The host can be renamed; refer to a website by id. An NSFW site is returned like any other; a client that hides NSFW content gates it. viewer is null for an anonymous caller.
+         * @description Returns the website whose main host is website_host and counts one view. The host can be renamed; refer to a website by id. A host folded away by an admin merge answers ENTITY_MERGED with current_id and current_host; the client 301-redirects. An NSFW site is returned like any other; a client that hides NSFW content gates it. viewer is null for an anonymous caller.
          */
         get: operations["getWebsite"];
         put?: never;
@@ -15387,6 +15427,165 @@ export interface components {
             /** @description Whether the caller liked the site. */
             has_liked: boolean;
         };
+        WebsiteMerge: {
+            /**
+             * Format: int64
+             * @description Survivor comment count after the fold.
+             */
+            comments_resulting: number;
+            /** @description Favorite transfer counts as executed. */
+            favorites: components["schemas"]["WebsiteMergeSlotStats"];
+            /** @description Merge ledger id. */
+            id: string;
+            /** @description Whether the survivor flipped to r18. */
+            is_target_upgraded_to_nsfw: boolean;
+            /** @description Like transfer counts as executed. */
+            likes: components["schemas"]["WebsiteMergeSlotStats"];
+            /**
+             * @description Type discriminant. Always website_merge.
+             * @constant
+             */
+            object: "website_merge";
+            /** @description Host that now answers ENTITY_MERGED. */
+            source_host: string;
+            /** @description Folded-away website id. */
+            source_website_id: string;
+            /**
+             * Format: int64
+             * @description Source tag links not moved.
+             */
+            tags_dropped_count: number;
+            /**
+             * Format: int64
+             * @description Tag links added to the survivor.
+             */
+            tags_moved_count: number;
+            /** @description Host of the surviving page. */
+            target_host: string;
+            /** @description Survivor website id. */
+            target_website_id: string;
+            /** @description Addresses appended to the survivor. */
+            urls_added: string[];
+            /**
+             * Format: int64
+             * @description Survivor view counter after the fold.
+             */
+            view_resulting: number;
+        };
+        WebsiteMergePreview: {
+            /**
+             * Format: int64
+             * @description Sum of the two cached comment counts; the survivor page reads both walls.
+             */
+            comments_resulting: number;
+            /** @description Favorite transfer counts. */
+            favorites: components["schemas"]["WebsiteMergeSlotStats"];
+            /** @description True when the survivor would flip to r18 because the source is r18. NSFW only ever moves up. */
+            is_target_upgraded_to_nsfw: boolean;
+            /** @description Like transfer counts. */
+            likes: components["schemas"]["WebsiteMergeSlotStats"];
+            /**
+             * @description Type discriminant. Always website_merge_preview.
+             * @constant
+             */
+            object: "website_merge_preview";
+            /** @description The website that would be folded away. */
+            source_website: components["schemas"]["WebsiteMergeSide"];
+            /** @description Tags the survivor gains. */
+            tags_added: components["schemas"]["WebsiteTag"][];
+            /** @description Source tags that do not move, with the reason. */
+            tags_dropped: components["schemas"]["WebsiteMergeTagDrop"][];
+            /** @description The website that would survive. */
+            target_website: components["schemas"]["WebsiteMergeSide"];
+            /** @description Source-only addresses appended to the survivor's urls. */
+            urls_added: string[];
+            /**
+             * Format: int64
+             * @description Sum of the two view counters.
+             */
+            view_resulting: number;
+        };
+        WebsiteMergeRequest: {
+            /** @description Id of the website folded away. Its host starts answering ENTITY_MERGED and its row is deleted. */
+            source_website_id: string;
+            /** @description Id of the website that survives and receives every row. */
+            target_website_id: string;
+        };
+        WebsiteMergeSide: {
+            /**
+             * Format: int64
+             * @description Cached comment count before the fold.
+             */
+            comment_count: number;
+            /**
+             * Format: int64
+             * @description Favorites before the fold.
+             */
+            favorite_count: number;
+            /** @description Main host name, lower case. */
+            host: string;
+            /** @description Website id. */
+            id: string;
+            /** @description Whether the site is adult-oriented. */
+            is_nsfw: boolean;
+            /**
+             * Format: int64
+             * @description Likes before the fold.
+             */
+            like_count: number;
+            /**
+             * @description Type discriminant. Always website_merge_side.
+             * @constant
+             */
+            object: "website_merge_side";
+            /** @description normal: the site is up. unreachable: temporarily down. closed: shut down for good. */
+            state: components["schemas"]["WebsiteState"];
+            /** @description Name of the site. Free text; never use it as a decision input. */
+            title: string;
+            /** @description Known addresses of the site. */
+            urls: string[];
+            /**
+             * Format: int64
+             * @description Lifetime views before the fold.
+             */
+            view_count: number;
+            /** @description Category the site is listed under. */
+            website_category: components["schemas"]["WebsiteCategoryRef"];
+        };
+        WebsiteMergeSlotStats: {
+            /**
+             * Format: int64
+             * @description Rows the fold adds to the survivor.
+             */
+            moved: number;
+            /**
+             * Format: int64
+             * @description Rows the same users already held on the survivor; they count once.
+             */
+            overlap: number;
+            /**
+             * Format: int64
+             * @description Survivor rows after the fold.
+             */
+            resulting: number;
+            /**
+             * Format: int64
+             * @description Rows the source held.
+             */
+            source_count: number;
+        };
+        WebsiteMergeTagDrop: {
+            /** @description duplicate: the survivor already carries this tag; single_select_group: the survivor carries another tag of the tag's single-select group. */
+            drop_reason: components["schemas"]["WebsiteMergeTagDropReason"];
+            /** @description The single-select group that caused the drop. null for a plain duplicate. */
+            group?: components["schemas"]["WebsiteTagGroup"];
+            /** @description The survivor tag that wins the group. null for a plain duplicate. */
+            survivor_tag?: components["schemas"]["WebsiteTag"];
+            /** @description The source tag that does not move. */
+            tag: components["schemas"]["WebsiteTag"];
+        };
+        /** @enum {string} */
+        WebsiteMergeTagDropReason: "duplicate" | "single_select_group";
         WebsitePatch: {
             /** @description New description. Free text; never use it as a decision input. */
             description?: string;
@@ -19756,6 +19955,228 @@ export interface operations {
                 };
             };
             /** @description VALIDATION_FAILED for a blank label, a field outside its format, or an unknown reference. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createAdminWebsiteMerge: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-generated UUID (canonical 8-4-4-4-12 hex, any version) or 26-character Crockford ULID. Scoped to (user, operation, key) for 24 hours. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebsiteMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebsiteMerge"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description PERMISSION_REQUIRED without website.delete; ACCOUNT_BANNED. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description NOT_FOUND when either website does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description ALREADY_EXISTS when the source was already merged elsewhere; IDEMPOTENCY_KEY_REUSED or IDEMPOTENCY_REQUEST_IN_PROGRESS. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description VALIDATION_FAILED for malformed ids or source equal to target. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewAdminWebsiteMerge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebsiteMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebsiteMergePreview"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description PERMISSION_REQUIRED without website.delete; ACCOUNT_BANNED. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description NOT_FOUND when either website does not exist or was already merged. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description VALIDATION_FAILED for malformed ids or source equal to target. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -44945,7 +45366,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description NOT_FOUND when no website has this host. */
+            /** @description NOT_FOUND when no website has this host; ENTITY_MERGED when the host was folded into another website. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -45022,7 +45443,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description NOT_FOUND when no website has this host. */
+            /** @description NOT_FOUND when no website has this host; ENTITY_MERGED when it was folded into another website. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -45099,7 +45520,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description NOT_FOUND when no website has this host. */
+            /** @description NOT_FOUND when no website has this host; ENTITY_MERGED when it was folded into another website. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -45176,7 +45597,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description NOT_FOUND when no website has this host. */
+            /** @description NOT_FOUND when no website has this host; ENTITY_MERGED when it was folded into another website. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -45253,7 +45674,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description NOT_FOUND when no website has this host. */
+            /** @description NOT_FOUND when no website has this host; ENTITY_MERGED when it was folded into another website. */
             404: {
                 headers: {
                     [name: string]: unknown;

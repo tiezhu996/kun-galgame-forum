@@ -300,6 +300,8 @@ POST   /api/trust/callback                            cors.New → middleware.Na
 POST   /api/v1/admin/docs                             cors.New → v1Headers → fiberAdapter.Handle
 POST   /api/v1/admin/friend-links                     cors.New → v1Headers → fiberAdapter.Handle
 POST   /api/v1/admin/website-categories               cors.New → v1Headers → fiberAdapter.Handle
+POST   /api/v1/admin/website-merges                   cors.New → v1Headers → fiberAdapter.Handle
+POST   /api/v1/admin/website-merges/preview           cors.New → v1Headers → fiberAdapter.Handle
 POST   /api/v1/admin/website-tag-groups               cors.New → v1Headers → fiberAdapter.Handle
 POST   /api/v1/admin/website-tags                     cors.New → v1Headers → fiberAdapter.Handle
 POST   /api/v1/admin/websites                         cors.New → v1Headers → fiberAdapter.Handle

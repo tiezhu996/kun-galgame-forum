@@ -76,6 +76,15 @@ const editForm = computed(() =>
 )
 const updating = ref(false)
 const deleting = ref(false)
+const merging = ref(false)
+
+const handleMerged = async (targetHost: string) => {
+  if (targetHost === props.website.host) {
+    emits('refresh')
+    return
+  }
+  await navigateTo(`/website/${targetHost}`)
+}
 
 const handleOpenUpdateModal = async () => {
   const result = await settle(
@@ -191,6 +200,24 @@ const handleDelete = async () => {
       :has-external-icon="!!editSource?.external_icon_url"
       :loading="updating"
       @submit="handleUpdate"
+    />
+
+    <KunTooltip v-if="website.viewer?.can_delete" text="合并">
+      <KunButton
+        :is-icon-only="true"
+        size="lg"
+        variant="light"
+        class-name="gap-1"
+        @click="merging = true"
+      >
+        <KunIcon name="lucide:git-merge" />
+      </KunButton>
+    </KunTooltip>
+
+    <WebsiteModalMerge
+      v-model="merging"
+      :website="website"
+      @merged="handleMerged"
     />
 
     <KunTooltip v-if="website.viewer?.can_delete" text="删除">

@@ -99,6 +99,15 @@ func (r *Resolver) Resolve(refs []Ref) map[Ref]Target {
 			out[ref] = Target{Link: "/website/" + domain, Label: "网站"}
 		}
 	}
+
+	// A folded website's row is gone; resolve its anchor to the survivor's
+	// current host so old notifications and search hits do not dead-link.
+	merged := r.mergedWebsiteDomains(websiteIDs)
+	for id, domain := range merged {
+		for _, ref := range websiteRefs[id] {
+			out[ref] = Target{Link: "/website/" + domain, Label: "网站"}
+		}
+	}
 	return out
 }
 
@@ -184,6 +193,27 @@ func (r *Resolver) websiteDomains(ids []int) map[int]string {
 		if row.URL != "" {
 			domains[row.ID] = row.URL
 		}
+	}
+	return domains
+}
+
+func (r *Resolver) mergedWebsiteDomains(ids []int) map[int]string {
+	if len(ids) == 0 {
+		return nil
+	}
+	var rows []struct {
+		OldID int    `gorm:"column:old_website_id"`
+		URL   string `gorm:"column:url"`
+	}
+	if err := r.db.Table("galgame_website_merge AS m").
+		Select("m.old_website_id, w.url").
+		Joins("JOIN galgame_website w ON w.id = m.new_website_id").
+		Where("m.old_website_id IN ?", ids).Scan(&rows).Error; err != nil {
+		return nil
+	}
+	domains := make(map[int]string, len(rows))
+	for _, row := range rows {
+		domains[row.OldID] = row.URL
 	}
 	return domains
 }

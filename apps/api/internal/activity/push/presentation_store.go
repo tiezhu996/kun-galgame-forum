@@ -120,6 +120,9 @@ func (p *Presenter) pageLocalPresentations(after *presentationKey, limit int) ([
 			SELECT 2::smallint, 'toolset:' || id::text FROM galgame_toolset
 			UNION
 			SELECT 2::smallint, 'website:' || id::text FROM galgame_website
+			UNION
+			SELECT 2::smallint, 'website:' || m.old_website_id::text
+			FROM galgame_website_merge m JOIN galgame_website w ON w.id = m.new_website_id
 		) p
 	`
 	args := []any{}

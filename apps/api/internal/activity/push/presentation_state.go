@@ -165,8 +165,30 @@ func (p *Presenter) loadPresentationState(ctx context.Context, keys []presentati
 	if err := scanIntMap(p.db, `SELECT id, name, url, age_limit FROM galgame_website WHERE id IN ?`, siteIDs, &sites); err != nil {
 		return nil, err
 	}
+	liveSite := map[int]bool{}
 	for _, r := range sites {
 		st.websites[r.ID] = r
+		liveSite[r.ID] = true
+	}
+	// A website folded away keeps presenting through its anchor with the
+	// survivor's title, host and NSFW flag, so cached community cards neither
+	// dead-link nor stay sfw after an r18 fold.
+	var missing []int
+	for _, id := range siteIDs {
+		if !liveSite[id] {
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) > 0 {
+		var merged []siteRow
+		if err := scanIntMap(p.db, `SELECT m.old_website_id AS id, w.name, w.url, w.age_limit
+			FROM galgame_website_merge m JOIN galgame_website w ON w.id = m.new_website_id
+			WHERE m.old_website_id IN ?`, missing, &merged); err != nil {
+			return nil, err
+		}
+		for _, r := range merged {
+			st.websites[r.ID] = r
+		}
 	}
 	var pubs []struct {
 		ID        int  `gorm:"column:id"`

@@ -63,10 +63,11 @@ func registerWebsites(api huma.API, svc *Service) {
 		Path:        "/websites/{website_host}",
 		Summary:     "Get a website by its host",
 		Description: "Returns the website whose main host is website_host and counts one view. The host can be renamed; refer to a website by id. " +
+			"A host folded away by an admin merge answers ENTITY_MERGED with current_id and current_host; the client 301-redirects. " +
 			"An NSFW site is returned like any other; a client that hides NSFW content gates it. viewer is null for an anonymous caller.",
 		Tags: []string{tagWebsites},
 		Responses: problemResponses(map[int]string{
-			404: "NOT_FOUND when no website has this host.",
+			404: "NOT_FOUND when no website has this host; ENTITY_MERGED when the host was folded into another website.",
 		}),
 	}), svc.getWebsite)
 
@@ -91,7 +92,7 @@ func registerSlot(api huma.API, id, method, path, summary, desc string, handler 
 		Tags: []string{tagWebsites},
 		Responses: problemResponses(map[int]string{
 			403: "ACCOUNT_BANNED.",
-			404: "NOT_FOUND when no website has this host.",
+			404: "NOT_FOUND when no website has this host; ENTITY_MERGED when it was folded into another website.",
 		}),
 	}), handler)
 }
@@ -158,6 +159,41 @@ func registerAdminWebsites(api huma.API, svc *Service) {
 			404: "NOT_FOUND when the website does not exist.",
 		}),
 	}), svc.deleteAdminWebsite)
+
+	huma.Register(api, v1.Required(huma.Operation{
+		OperationID: "previewAdminWebsiteMerge",
+		Method:      http.MethodPost,
+		Path:        "/admin/website-merges/preview",
+		Summary:     "Preview merging one website into another",
+		Description: "Computes, without writing anything, how source_website_id would fold into target_website_id: likes and favorites a same user holds on both overlap and count once, " +
+			"tags move as a union except a tag of a single-select group when the survivor already carries a tag of that group, the source's extra urls are appended once, " +
+			"view and cached comment counts add, and r18 moves only up onto the survivor. Needs website.delete. " + bearerNote + activeCheck +
+			"The source's community comments stay on their own anchor and are read through the survivor page after the fold.",
+		Tags: []string{tagWebsites},
+		Responses: problemResponses(map[int]string{
+			403: "PERMISSION_REQUIRED without website.delete; ACCOUNT_BANNED.",
+			404: "NOT_FOUND when either website does not exist or was already merged.",
+			422: "VALIDATION_FAILED for malformed ids or source equal to target.",
+		}),
+	}), svc.previewAdminWebsiteMerge)
+
+	huma.Register(api, v1.IdempotencyRequired(v1.Required(huma.Operation{
+		OperationID: "createAdminWebsiteMerge",
+		Method:      http.MethodPost,
+		Path:        "/admin/website-merges",
+		Summary:     "Merge one website into another",
+		Description: "Folds source_website_id into target_website_id in one transaction: likes, favorites and movable tags move to the survivor with overlaps counted once, " +
+			"counters and views are recomputed, feed cards and notifications linking the old host are rewritten, the source row is deleted, and its host begins answering ENTITY_MERGED with the survivor. " +
+			"Replaying the same source and target after the fold returns the stored result and writes nothing; a source already folded into a different survivor is ALREADY_EXISTS. " +
+			"Needs website.delete. " + bearerNote + activeCheck,
+		Tags: []string{tagWebsites},
+		Responses: problemResponses(map[int]string{
+			403: "PERMISSION_REQUIRED without website.delete; ACCOUNT_BANNED.",
+			404: "NOT_FOUND when either website does not exist.",
+			409: "ALREADY_EXISTS when the source was already merged elsewhere; IDEMPOTENCY_KEY_REUSED or IDEMPOTENCY_REQUEST_IN_PROGRESS.",
+			422: "VALIDATION_FAILED for malformed ids or source equal to target.",
+		}),
+	})), svc.createAdminWebsiteMerge)
 }
 
 func registerCategories(api huma.API, svc *Service) {

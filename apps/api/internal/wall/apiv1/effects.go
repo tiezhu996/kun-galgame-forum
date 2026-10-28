@@ -41,7 +41,7 @@ func (s *Service) afterCreate(ctx context.Context, sub *subject, authorID int, b
 			slog.Warn("wall counter bump failed (best-effort)", "subject", sub.spec.typ, "id", sub.id, "error", err)
 		}
 	case sub.spec.counterTable != "":
-		if err := s.store.BumpCount(sub.spec.counterTable, sub.id, 1); err != nil {
+		if err := s.store.BumpCount(sub.spec.counterTable, sub.counterID(), 1); err != nil {
 			slog.Warn("wall counter bump failed (best-effort)", "subject", sub.spec.typ, "id", sub.id, "error", err)
 		}
 	}
@@ -99,7 +99,7 @@ func (s *Service) afterDelete(sub *subject, postID int64) {
 			slog.Warn("wall counter bump failed (best-effort)", "subject", sub.spec.typ, "id", sub.id, "error", err)
 		}
 	case sub.spec.counterTable != "":
-		if err := s.store.BumpCount(sub.spec.counterTable, sub.id, -1); err != nil {
+		if err := s.store.BumpCount(sub.spec.counterTable, sub.counterID(), -1); err != nil {
 			slog.Warn("wall counter bump failed (best-effort)", "subject", sub.spec.typ, "id", sub.id, "error", err)
 		}
 	}

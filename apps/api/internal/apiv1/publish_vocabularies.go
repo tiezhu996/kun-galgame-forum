@@ -132,6 +132,7 @@ var vocabularies = []vocabulary{
 	{"WalkthroughStepType", []string{"choice", "action", "save"}},
 	{"WallCommentState", []string{"visible", "held", "deleted"}},
 	{"WallSubjectType", []string{"galgame", "galgame_rating", "galgame_resource", "galgame_quiz", "galgame_walkthrough", "toolset", "website"}},
+	{"WebsiteMergeTagDropReason", []string{"duplicate", "single_select_group"}},
 	{"WebsiteState", []string{"normal", "unreachable", "closed"}},
 	{"WorkMedium", []string{"galgame", "manga", "novel", "anime", "asmr", "doujin_game", "music"}},
 	{"WorkMergeFoldProblemCause", []string{"gone", "elsewhere", "conflict", "purged_user", "survivor_folded"}},

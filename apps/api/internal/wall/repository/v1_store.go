@@ -117,6 +117,53 @@ func (s *Store) Website(id int) (*Website, error) {
 	return &rows[0], nil
 }
 
+// ResolvedWebsite names the survivor page a wall read belongs to. AnchorIDs is
+// the survivor plus every website folded into it: their comments live on the
+// community anchors website:<id> and the survivor page reads all of them.
+type ResolvedWebsite struct {
+	Website
+	PageID    int
+	AnchorIDs []int
+}
+
+func (s *Store) ResolveWebsite(id int) (*ResolvedWebsite, error) {
+	if w, err := s.Website(id); err == nil {
+		absorbed, aerr := s.absorbedWebsites(id)
+		if aerr != nil {
+			return nil, aerr
+		}
+		return &ResolvedWebsite{Website: *w, PageID: id, AnchorIDs: append([]int{id}, absorbed...)}, nil
+	} else if !errors.Is(err, ErrNotFound) {
+		return nil, err
+	}
+
+	var newID int
+	res := s.db.Table("galgame_website_merge").Select("new_website_id").
+		Where("old_website_id = ?", id).Take(&newID)
+	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	w, err := s.Website(newID)
+	if err != nil {
+		return nil, err
+	}
+	absorbed, err := s.absorbedWebsites(newID)
+	if err != nil {
+		return nil, err
+	}
+	return &ResolvedWebsite{Website: *w, PageID: newID, AnchorIDs: append([]int{newID}, absorbed...)}, nil
+}
+
+func (s *Store) absorbedWebsites(targetID int) ([]int, error) {
+	var ids []int
+	err := s.db.Table("galgame_website_merge").Where("new_website_id = ?", targetID).
+		Order("old_website_id").Pluck("old_website_id", &ids).Error
+	return ids, err
+}
+
 func (s *Store) LikeCounts(postIDs []int64) (map[int64]int, error) {
 	out := make(map[int64]int, len(postIDs))
 	if len(postIDs) == 0 {

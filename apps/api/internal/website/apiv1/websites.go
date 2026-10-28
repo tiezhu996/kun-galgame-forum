@@ -119,12 +119,30 @@ func (s *Service) listWebsites(ctx context.Context, in *listWebsitesInput) (*lis
 	return &listWebsitesOutput{Body: repr.NewCountedList(items, next, total)}, nil
 }
 
+func websiteMerged(newID int, newHost string) *problem.Problem {
+	p := problem.New(problem.CodeEntityMerged, "This website was merged into another website.")
+	p.SetExtension("object", "website")
+	p.SetExtension("current_id", strconv.Itoa(newID))
+	p.SetExtension("current_host", newHost)
+	return p
+}
+
 func (s *Service) byHost(host string) (*repository.WebsiteRow, *problem.Problem) {
 	row, err := s.store.FindWebsiteByHost(host)
-	if err != nil {
-		return nil, storeProblem(err)
+	if err == nil {
+		return row, nil
 	}
-	return row, nil
+	if !errors.Is(err, repository.ErrNotFound) {
+		return nil, problem.Internal(err)
+	}
+	newID, newHost, ok, err := s.store.WebsiteRedirectByHost(host)
+	if err != nil {
+		return nil, problem.Internal(err)
+	}
+	if ok {
+		return nil, websiteMerged(newID, newHost)
+	}
+	return nil, notFound()
 }
 
 func (s *Service) getWebsite(ctx context.Context, in *hostInput) (*websiteOutput, error) {
@@ -518,23 +536,42 @@ func (s *Service) deleteAdminWebsite(ctx context.Context, in *websiteIDInput) (*
 
 func (s *Service) SummariesByIDs(ids []int) (map[int]WebsiteSummary, error) {
 	rows := make([]repository.WebsiteRow, 0, len(ids))
+	survivorOf := make(map[int]int, len(ids))
+	seen := map[int]bool{}
 	for _, id := range ids {
 		row, err := s.store.FindWebsite(id)
 		if errors.Is(err, repository.ErrNotFound) {
-			continue
+			newID, ok, merr := s.store.ResolveMergedWebsite(id)
+			if merr != nil {
+				return nil, merr
+			}
+			if !ok {
+				continue
+			}
+			row, err = s.store.FindWebsite(newID)
 		}
 		if err != nil {
 			return nil, err
 		}
-		rows = append(rows, *row)
+		survivorOf[id] = row.ID
+		if !seen[row.ID] {
+			seen[row.ID] = true
+			rows = append(rows, *row)
+		}
 	}
 	summaries, p := s.summaries(rows)
 	if p != nil {
 		return nil, p
 	}
-	out := make(map[int]WebsiteSummary, len(summaries))
+	byID := make(map[int]WebsiteSummary, len(rows))
 	for i, sum := range summaries {
-		out[rows[i].ID] = sum
+		byID[rows[i].ID] = sum
+	}
+	out := make(map[int]WebsiteSummary, len(survivorOf))
+	for id, survivorID := range survivorOf {
+		if sum, ok := byID[survivorID]; ok {
+			out[id] = sum
+		}
 	}
 	return out, nil
 }

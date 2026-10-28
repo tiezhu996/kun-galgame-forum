@@ -36,30 +36,30 @@ func unknownParent() *problem.Problem {
 		"the comment is not a visible comment on this wall", nil))
 }
 
-func (s *Service) parentOf(ctx context.Context, sub *subject, raw *repr.DecimalID, viewer *middleware.UserInfo) (*communityclient.PostView, *problem.Problem) {
+func (s *Service) parentOf(ctx context.Context, sub *subject, raw *repr.DecimalID, viewer *middleware.UserInfo) (*communityclient.PostView, string, *problem.Problem) {
 	if raw == nil {
-		return nil, nil
+		return nil, "", nil
 	}
 	id, ok := repr.ParseID(*raw)
 	if !ok {
-		return nil, unknownParent()
+		return nil, "", unknownParent()
 	}
 	res, err := s.community.ResolvePosts(ctx, []int64{int64(id)})
 	if err != nil {
-		return nil, upstreamProblem(err)
+		return nil, "", upstreamProblem(err)
 	}
 	for _, ap := range res.Posts {
-		if ap.Post.ID != int64(id) || ap.Thread.AnchorKind != sub.spec.anchorKind || ap.Thread.AnchorID != sub.spec.anchorID(sub.id) {
+		if ap.Post.ID != int64(id) || !sub.allowsAnchor(ap.Thread.AnchorKind, ap.Thread.AnchorID) {
 			continue
 		}
 		switch {
 		case ap.Post.Status == communityclient.PostDeleted:
 		case ap.Post.Status == communityclient.PostHeld && ap.Post.AuthorID != int64(viewer.ID):
 		default:
-			return &ap.Post, nil
+			return &ap.Post, ap.Thread.AnchorID, nil
 		}
 	}
-	return nil, unknownParent()
+	return nil, "", unknownParent()
 }
 
 // mentionIDs keeps the galgame wall's behaviour: the community service notifies
@@ -131,7 +131,7 @@ func (s *Service) createWallComment(ctx context.Context, in *createInput) (*crea
 	if p != nil {
 		return nil, p
 	}
-	parent, p := s.parentOf(ctx, sub, in.Body.ParentCommentID, viewer)
+	parent, parentAnchor, p := s.parentOf(ctx, sub, in.Body.ParentCommentID, viewer)
 	if p != nil {
 		return nil, p
 	}
@@ -140,8 +140,18 @@ func (s *Service) createWallComment(ctx context.Context, in *createInput) (*crea
 		return nil, p
 	}
 
+	// A website reply lands on its parent's thread: a reply to a post a folded
+	// website left behind writes the old anchor, while a new top-level comment
+	// always opens the survivor anchor.
+	anchorID := spec.anchorID(sid)
+	if spec.typ == "website" {
+		anchorID = spec.anchorID(sub.websitePageID)
+		if parent != nil && parentAnchor != "" {
+			anchorID = parentAnchor
+		}
+	}
 	req := communityclient.CommentRequest{
-		AnchorKind: spec.anchorKind, AnchorID: spec.anchorID(sid),
+		AnchorKind: spec.anchorKind, AnchorID: anchorID,
 		ContentRating: communityclient.RatingAll, AuthorID: int64(viewer.ID), Body: body,
 		MentionUserIDs: mentions,
 	}

@@ -25810,6 +25810,373 @@
         ],
         "type": "object"
       },
+      "WebsiteMerge": {
+        "properties": {
+          "comments_resulting": {
+            "description": "Survivor comment count after the fold.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "favorites": {
+            "$ref": "#/components/schemas/WebsiteMergeSlotStats",
+            "description": "Favorite transfer counts as executed."
+          },
+          "id": {
+            "description": "Merge ledger id.",
+            "maxLength": 20,
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "is_target_upgraded_to_nsfw": {
+            "description": "Whether the survivor flipped to r18.",
+            "type": "boolean"
+          },
+          "likes": {
+            "$ref": "#/components/schemas/WebsiteMergeSlotStats",
+            "description": "Like transfer counts as executed."
+          },
+          "object": {
+            "const": "website_merge",
+            "description": "Type discriminant. Always website_merge.",
+            "maxLength": 13,
+            "type": "string"
+          },
+          "source_host": {
+            "description": "Host that now answers ENTITY_MERGED.",
+            "maxLength": 253,
+            "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$",
+            "type": "string"
+          },
+          "source_website_id": {
+            "description": "Folded-away website id.",
+            "maxLength": 20,
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "tags_dropped_count": {
+            "description": "Source tag links not moved.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "tags_moved_count": {
+            "description": "Tag links added to the survivor.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "target_host": {
+            "description": "Host of the surviving page.",
+            "maxLength": 253,
+            "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$",
+            "type": "string"
+          },
+          "target_website_id": {
+            "description": "Survivor website id.",
+            "maxLength": 20,
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "urls_added": {
+            "description": "Addresses appended to the survivor.",
+            "items": {
+              "description": "An http or https URL of at most 100 characters.",
+              "format": "uri",
+              "maxLength": 100,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "view_resulting": {
+            "description": "Survivor view counter after the fold.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "object",
+          "id",
+          "source_website_id",
+          "target_website_id",
+          "source_host",
+          "target_host",
+          "likes",
+          "favorites",
+          "tags_moved_count",
+          "tags_dropped_count",
+          "urls_added",
+          "comments_resulting",
+          "view_resulting",
+          "is_target_upgraded_to_nsfw"
+        ],
+        "type": "object"
+      },
+      "WebsiteMergePreview": {
+        "properties": {
+          "comments_resulting": {
+            "description": "Sum of the two cached comment counts; the survivor page reads both walls.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "favorites": {
+            "$ref": "#/components/schemas/WebsiteMergeSlotStats",
+            "description": "Favorite transfer counts."
+          },
+          "is_target_upgraded_to_nsfw": {
+            "description": "True when the survivor would flip to r18 because the source is r18. NSFW only ever moves up.",
+            "type": "boolean"
+          },
+          "likes": {
+            "$ref": "#/components/schemas/WebsiteMergeSlotStats",
+            "description": "Like transfer counts."
+          },
+          "object": {
+            "const": "website_merge_preview",
+            "description": "Type discriminant. Always website_merge_preview.",
+            "maxLength": 22,
+            "type": "string"
+          },
+          "source_website": {
+            "$ref": "#/components/schemas/WebsiteMergeSide",
+            "description": "The website that would be folded away."
+          },
+          "tags_added": {
+            "description": "Tags the survivor gains.",
+            "items": {
+              "$ref": "#/components/schemas/WebsiteTag"
+            },
+            "type": "array"
+          },
+          "tags_dropped": {
+            "description": "Source tags that do not move, with the reason.",
+            "items": {
+              "$ref": "#/components/schemas/WebsiteMergeTagDrop"
+            },
+            "type": "array"
+          },
+          "target_website": {
+            "$ref": "#/components/schemas/WebsiteMergeSide",
+            "description": "The website that would survive."
+          },
+          "urls_added": {
+            "description": "Source-only addresses appended to the survivor's urls.",
+            "items": {
+              "description": "An http or https URL of at most 100 characters.",
+              "format": "uri",
+              "maxLength": 100,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "view_resulting": {
+            "description": "Sum of the two view counters.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "object",
+          "source_website",
+          "target_website",
+          "likes",
+          "favorites",
+          "tags_added",
+          "tags_dropped",
+          "urls_added",
+          "comments_resulting",
+          "view_resulting",
+          "is_target_upgraded_to_nsfw"
+        ],
+        "type": "object"
+      },
+      "WebsiteMergeRequest": {
+        "properties": {
+          "source_website_id": {
+            "description": "Id of the website folded away. Its host starts answering ENTITY_MERGED and its row is deleted.",
+            "maxLength": 20,
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "target_website_id": {
+            "description": "Id of the website that survives and receives every row.",
+            "maxLength": 20,
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_website_id",
+          "target_website_id"
+        ],
+        "type": "object"
+      },
+      "WebsiteMergeSide": {
+        "properties": {
+          "comment_count": {
+            "description": "Cached comment count before the fold.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "favorite_count": {
+            "description": "Favorites before the fold.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "host": {
+            "description": "Main host name, lower case.",
+            "maxLength": 253,
+            "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$",
+            "type": "string"
+          },
+          "id": {
+            "description": "Website id.",
+            "maxLength": 20,
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "is_nsfw": {
+            "description": "Whether the site is adult-oriented.",
+            "type": "boolean"
+          },
+          "like_count": {
+            "description": "Likes before the fold.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "object": {
+            "const": "website_merge_side",
+            "description": "Type discriminant. Always website_merge_side.",
+            "maxLength": 18,
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/WebsiteState",
+            "description": "normal: the site is up. unreachable: temporarily down. closed: shut down for good."
+          },
+          "title": {
+            "description": "Name of the site. Free text; never use it as a decision input.",
+            "maxLength": 233,
+            "type": "string"
+          },
+          "urls": {
+            "description": "Known addresses of the site.",
+            "items": {
+              "description": "An http or https URL of at most 100 characters.",
+              "format": "uri",
+              "maxLength": 100,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "view_count": {
+            "description": "Lifetime views before the fold.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "website_category": {
+            "$ref": "#/components/schemas/WebsiteCategoryRef",
+            "description": "Category the site is listed under."
+          }
+        },
+        "required": [
+          "object",
+          "id",
+          "host",
+          "title",
+          "state",
+          "is_nsfw",
+          "website_category",
+          "view_count",
+          "like_count",
+          "favorite_count",
+          "comment_count",
+          "urls"
+        ],
+        "type": "object"
+      },
+      "WebsiteMergeSlotStats": {
+        "properties": {
+          "moved": {
+            "description": "Rows the fold adds to the survivor.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "overlap": {
+            "description": "Rows the same users already held on the survivor; they count once.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "resulting": {
+            "description": "Survivor rows after the fold.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "source_count": {
+            "description": "Rows the source held.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_count",
+          "overlap",
+          "moved",
+          "resulting"
+        ],
+        "type": "object"
+      },
+      "WebsiteMergeTagDrop": {
+        "properties": {
+          "drop_reason": {
+            "$ref": "#/components/schemas/WebsiteMergeTagDropReason",
+            "description": "duplicate: the survivor already carries this tag; single_select_group: the survivor carries another tag of the tag's single-select group."
+          },
+          "group": {
+            "$ref": "#/components/schemas/WebsiteTagGroup",
+            "description": "The single-select group that caused the drop. null for a plain duplicate."
+          },
+          "survivor_tag": {
+            "$ref": "#/components/schemas/WebsiteTag",
+            "description": "The survivor tag that wins the group. null for a plain duplicate."
+          },
+          "tag": {
+            "$ref": "#/components/schemas/WebsiteTag",
+            "description": "The source tag that does not move."
+          }
+        },
+        "required": [
+          "tag",
+          "drop_reason"
+        ],
+        "type": "object"
+      },
+      "WebsiteMergeTagDropReason": {
+        "enum": [
+          "duplicate",
+          "single_select_group"
+        ],
+        "maxLength": 19,
+        "type": "string",
+        "x-vocabulary-closed": true
+      },
       "WebsitePatch": {
         "properties": {
           "description": {
@@ -33331,6 +33698,291 @@
         "summary": "Edit a website category",
         "tags": [
           "website-taxonomy"
+        ]
+      }
+    },
+    "/admin/website-merges": {
+      "post": {
+        "description": "Folds source_website_id into target_website_id in one transaction: likes, favorites and movable tags move to the survivor with overlaps counted once, counters and views are recomputed, feed cards and notifications linking the old host are rewritten, the source row is deleted, and its host begins answering ENTITY_MERGED with the survivor. Replaying the same source and target after the fold returns the stored result and writes nothing; a source already folded into a different survivor is ALREADY_EXISTS. Needs website.delete. Requests authenticated with a Bearer token never carry website permissions. The caller is checked against the account service's current record first: a banned account is ACCOUNT_BANNED, and a failure of that lookup is SERVICE_UNAVAILABLE with nothing written. ",
+        "operationId": "createAdminWebsiteMerge",
+        "parameters": [
+          {
+            "description": "Caller-generated UUID (canonical 8-4-4-4-12 hex, any version) or 26-character Crockford ULID. Scoped to (user, operation, key) for 24 hours.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Caller-generated UUID (canonical 8-4-4-4-12 hex, any version) or 26-character Crockford ULID. Scoped to (user, operation, key) for 24 hours.",
+              "maxLength": 36,
+              "minLength": 26,
+              "pattern": "^([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}|[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26})$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebsiteMergeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebsiteMerge"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "PERMISSION_REQUIRED without website.delete; ACCOUNT_BANNED."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND when either website does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "ALREADY_EXISTS when the source was already merged elsewhere; IDEMPOTENCY_KEY_REUSED or IDEMPOTENCY_REQUEST_IN_PROGRESS."
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_FAILED for malformed ids or source equal to target."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Merge one website into another",
+        "tags": [
+          "websites"
+        ]
+      }
+    },
+    "/admin/website-merges/preview": {
+      "post": {
+        "description": "Computes, without writing anything, how source_website_id would fold into target_website_id: likes and favorites a same user holds on both overlap and count once, tags move as a union except a tag of a single-select group when the survivor already carries a tag of that group, the source's extra urls are appended once, view and cached comment counts add, and r18 moves only up onto the survivor. Needs website.delete. Requests authenticated with a Bearer token never carry website permissions. The caller is checked against the account service's current record first: a banned account is ACCOUNT_BANNED, and a failure of that lookup is SERVICE_UNAVAILABLE with nothing written. The source's community comments stay on their own anchor and are read through the survivor page after the fold.",
+        "operationId": "previewAdminWebsiteMerge",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebsiteMergeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebsiteMergePreview"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "PERMISSION_REQUIRED without website.delete; ACCOUNT_BANNED."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND when either website does not exist or was already merged."
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_FAILED for malformed ids or source equal to target."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Preview merging one website into another",
+        "tags": [
+          "websites"
         ]
       }
     },
@@ -70468,7 +71120,7 @@
     },
     "/websites/{website_host}": {
       "get": {
-        "description": "Returns the website whose main host is website_host and counts one view. The host can be renamed; refer to a website by id. An NSFW site is returned like any other; a client that hides NSFW content gates it. viewer is null for an anonymous caller.",
+        "description": "Returns the website whose main host is website_host and counts one view. The host can be renamed; refer to a website by id. A host folded away by an admin merge answers ENTITY_MERGED with current_id and current_host; the client 301-redirects. An NSFW site is returned like any other; a client that hides NSFW content gates it. viewer is null for an anonymous caller.",
         "operationId": "getWebsite",
         "parameters": [
           {
@@ -70533,7 +71185,7 @@
                 }
               }
             },
-            "description": "NOT_FOUND when no website has this host."
+            "description": "NOT_FOUND when no website has this host; ENTITY_MERGED when the host was folded into another website."
           },
           "500": {
             "content": {
@@ -70638,7 +71290,7 @@
                 }
               }
             },
-            "description": "NOT_FOUND when no website has this host."
+            "description": "NOT_FOUND when no website has this host; ENTITY_MERGED when it was folded into another website."
           },
           "500": {
             "content": {
@@ -70740,7 +71392,7 @@
                 }
               }
             },
-            "description": "NOT_FOUND when no website has this host."
+            "description": "NOT_FOUND when no website has this host; ENTITY_MERGED when it was folded into another website."
           },
           "500": {
             "content": {
@@ -70844,7 +71496,7 @@
                 }
               }
             },
-            "description": "NOT_FOUND when no website has this host."
+            "description": "NOT_FOUND when no website has this host; ENTITY_MERGED when it was folded into another website."
           },
           "500": {
             "content": {
@@ -70946,7 +71598,7 @@
                 }
               }
             },
-            "description": "NOT_FOUND when no website has this host."
+            "description": "NOT_FOUND when no website has this host; ENTITY_MERGED when it was folded into another website."
           },
           "500": {
             "content": {

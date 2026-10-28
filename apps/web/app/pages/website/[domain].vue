@@ -9,6 +9,7 @@ import type {
 } from 'schema-dts'
 import { documentPlainText } from '#shared/utils/content/plainText'
 import type { Website, WallComment } from '#shared/utils/api/schemas'
+import { mergedWebsiteHost } from '#shared/utils/api/merged'
 import { deletedUserName } from '~/utils/userRef'
 
 definePageMeta({ key: (route) => route.path })
@@ -17,15 +18,27 @@ const route = useRoute()
 
 const host = computed(() => (route.params as { domain: string }).domain)
 
+const movedHost = ref<string | null>(null)
+
 // Awaited: the reviews key below is built from it, and the server never
 // re-keys a fetch.
 const { data, problem, pending, refresh } = await useKunApi<Website>(
   () => `website:${host.value}`,
-  (api) =>
-    api.GET('/websites/{website_host}', {
+  async (api) => {
+    const res = await api.GET('/websites/{website_host}', {
       params: { path: { website_host: host.value } }
     })
+    movedHost.value = mergedWebsiteHost(res.error)
+    return res
+  }
 )
+
+if (movedHost.value) {
+  await navigateTo(`/website/${movedHost.value}`, {
+    redirectCode: 301,
+    replace: true
+  })
+}
 
 const iconUrl = computed(
   () => data.value?.icon?.url ?? data.value?.external_icon_url ?? ''

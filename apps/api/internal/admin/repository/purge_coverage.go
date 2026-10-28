@@ -57,6 +57,7 @@ var UserColumns = []UserColumn{
 	{"galgame_website", "user_id", HandlingTransfer, "a shared directory entry; it goes to the column's default owner"},
 	{"galgame_website_favorite", "user_id", HandlingDelete, ""},
 	{"galgame_website_like", "user_id", HandlingDelete, ""},
+	{"galgame_website_merge", "created_by", HandlingKeep, "audit trail of the admin merge"},
 	{"kungal_user_state", "user_id", HandlingDelete, ""},
 	{"message", "receiver_id", HandlingDelete, ""},
 	{"message", "sender_id", HandlingDelete, ""},

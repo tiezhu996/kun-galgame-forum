@@ -16,7 +16,7 @@
       "status": 404,
       "type": "https://developer.nextmoe.dev/problems/platform/entity-merged",
       "title": "Entity merged",
-      "description": "The catalog entity at this URL was merged into another. object names its family and current_id the entity it became; read that one instead."
+      "description": "The catalog entity at this URL was merged into another. object names its family and current_id the entity it became; for a website, current_host is the survivor's host, so the page can 301. Read that one instead."
     },
     {
       "object": "problem_type",

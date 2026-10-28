@@ -71,7 +71,32 @@ type subject struct {
 	ownerID     int
 	workID      int
 	websiteSlug string
-	isNSFW      bool
+	// websitePageID is the survivor website that owns counters and links; it
+	// differs from id only when the requested website was folded away.
+	websitePageID int
+	// websiteAnchorIDs is the survivor anchor plus the absorbed anchors the
+	// survivor page reads. Empty for every other subject kind.
+	websiteAnchorIDs []int
+	isNSFW           bool
+}
+
+func (sub *subject) counterID() int {
+	if sub.spec.typ == "website" && sub.websitePageID != 0 {
+		return sub.websitePageID
+	}
+	return sub.id
+}
+
+func (sub *subject) allowsAnchor(kind int32, anchorID string) bool {
+	if sub.spec.typ == "website" && len(sub.websiteAnchorIDs) > 0 {
+		for _, id := range sub.websiteAnchorIDs {
+			if kind == sub.spec.anchorKind && anchorID == sub.spec.anchorID(id) {
+				return true
+			}
+		}
+		return false
+	}
+	return kind == sub.spec.anchorKind && anchorID == sub.spec.anchorID(sub.id)
 }
 
 func notFound() *problem.Problem {
@@ -115,11 +140,13 @@ func (s *Service) resolveSubject(ctx context.Context, spec subjectSpec, id int, 
 		}
 		return sub, nil
 	case "website":
-		w, werr := s.store.Website(id)
+		w, werr := s.store.ResolveWebsite(id)
 		if werr != nil {
 			return nil, storeProblem(werr)
 		}
 		sub.websiteSlug = w.URL
+		sub.websitePageID = w.PageID
+		sub.websiteAnchorIDs = w.AnchorIDs
 		sub.isNSFW = w.AgeLimit != "all"
 		return sub, nil
 	case "galgame_walkthrough":
