@@ -91,18 +91,22 @@ func encodeDraftMiniApps(polls []TopicDraftPoll, lotteries []TopicDraftLottery) 
 	return draftMiniApps{polls: p, lotteries: l, prizeImages: images}, nil
 }
 
-func decodeDraftMiniApps(d *model.TopicDraft) ([]TopicDraftPoll, []TopicDraftLottery, error) {
+func decodeMiniApps(pollsJSON, lotteriesJSON json.RawMessage) ([]TopicDraftPoll, []TopicDraftLottery, error) {
 	polls := []TopicDraftPoll{}
 	lotteries := []TopicDraftLottery{}
-	if len(d.Polls) > 0 {
-		if err := json.Unmarshal(d.Polls, &polls); err != nil {
+	if len(pollsJSON) > 0 {
+		if err := json.Unmarshal(pollsJSON, &polls); err != nil {
 			return nil, nil, err
 		}
 	}
-	if len(d.Lotteries) > 0 {
-		if err := json.Unmarshal(d.Lotteries, &lotteries); err != nil {
+	if len(lotteriesJSON) > 0 {
+		if err := json.Unmarshal(lotteriesJSON, &lotteries); err != nil {
 			return nil, nil, err
 		}
 	}
 	return polls, lotteries, nil
+}
+
+func decodeDraftMiniApps(d *model.TopicDraft) ([]TopicDraftPoll, []TopicDraftLottery, error) {
+	return decodeMiniApps(d.Polls, d.Lotteries)
 }

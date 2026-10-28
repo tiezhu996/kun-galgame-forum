@@ -37,6 +37,7 @@ var requiredCodes = []struct {
 	{CodeImageDailyLimitReached, DomainKungal, 429},
 	{CodeImageRejected, DomainKungal, 422},
 	{CodeDraftLimitReached, DomainKungal, 409},
+	{CodeDraftRevisionConflict, DomainKungal, 409},
 	{CodeLotteryClosed, DomainKungal, 409},
 	{CodeLotteryIneligible, DomainKungal, 403},
 	{CodeLotteryCreatorIneligible, DomainKungal, 403},

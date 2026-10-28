@@ -68,6 +68,7 @@ const (
 	CodeImageDailyLimitReached       = "IMAGE_DAILY_LIMIT_REACHED"
 	CodeImageRejected                = "IMAGE_REJECTED"
 	CodeDraftLimitReached            = "DRAFT_LIMIT_REACHED"
+	CodeDraftRevisionConflict        = "DRAFT_REVISION_CONFLICT"
 	CodeMoemoepointInsufficient      = "MOEMOEPOINT_INSUFFICIENT"
 	CodeSelfLikeForbidden            = "SELF_LIKE_FORBIDDEN"
 	CodeResourcePublishBanned        = "RESOURCE_PUBLISH_BANNED"
@@ -159,6 +160,7 @@ var Codes = []Def{
 	{CodeImageDailyLimitReached, DomainKungal, http.StatusTooManyRequests, "Image daily limit reached", "The caller has uploaded as many images today, Asia/Shanghai, as one user may. limit is that number.", []ExtDef{{Name: "limit", Type: "integer"}}},
 	{CodeImageRejected, DomainKungal, http.StatusUnprocessableEntity, "Image rejected", "The image service's moderation refused the image. Nothing was stored.", nil},
 	{CodeDraftLimitReached, DomainKungal, http.StatusConflict, "Draft limit reached", "The caller already holds the maximum number of drafts. A draft is never overwritten, so the only way to make room is to delete one. limit is that number.", []ExtDef{{Name: "limit", Type: "integer"}}},
+	{CodeDraftRevisionConflict, DomainKungal, http.StatusConflict, "Draft revision conflict", "The draft was written by another request (another window or device) after this request loaded it. Nothing was written. current_revision is the revision now stored; GET the draft, then re-send with force=true to overwrite it (the other write is kept as a checkpoint revision), or load the stored content and edit on top of it.", []ExtDef{{Name: "current_revision", Type: "integer"}}},
 	{CodeMoemoepointInsufficient, DomainKungal, http.StatusForbidden, "Moemoepoint insufficient", "The caller's moemoepoint balance is below what the operation costs. Topic operations check the balance this forum last cached; account-service operations such as a rename or a shop purchase check the live balance. required is that cost, when the forum knows it.", []ExtDef{{Name: "required", Type: "integer"}}},
 	{CodeSelfLikeForbidden, DomainKungal, http.StatusForbidden, "Self like forbidden", "Users cannot like what they wrote themselves.", nil},
 	{CodeResourcePublishBanned, DomainKungal, http.StatusForbidden, "Resource publish banned", "This work is banned from publishing download resources.", nil},

@@ -37,8 +37,15 @@ func (d *Drafts) ready() *problem.Problem {
 
 func draftLimitReached(limit int) *problem.Problem {
 	p := problem.New(problem.CodeDraftLimitReached,
-		"The caller already holds the maximum number of drafts. A draft is never overwritten, so the only way to make room is to delete one.")
+		"The caller already holds the maximum number of drafts. Continued saves update one draft, so the only way to hit the cap is to start that many separate posts; delete one to make room.")
 	p.SetExtension("limit", limit)
+	return p
+}
+
+func draftRevisionConflict(currentRevision int) *problem.Problem {
+	p := problem.New(problem.CodeDraftRevisionConflict,
+		"The draft was written by another request after this request loaded it.")
+	p.SetExtension("current_revision", currentRevision)
 	return p
 }
 
@@ -65,6 +72,15 @@ type createTopicDraftInput struct {
 type createTopicDraftOutput struct {
 	Location string `header:"Location" format:"uri-reference" maxLength:"64" doc:"Absolute path of the new draft, such as /api/v1/me/topic-drafts/412."`
 	Body     TopicDraft
+}
+
+type updateTopicDraftInput struct {
+	DraftID string `path:"draft_id" pattern:"^[1-9][0-9]{0,18}$" maxLength:"19" doc:"Draft id."`
+	Body    TopicDraftUpdate
+}
+
+type updateTopicDraftOutput struct {
+	Body TopicDraft
 }
 
 type deleteTopicDraftOutput struct{}
@@ -131,6 +147,7 @@ func (d *Drafts) listTopicDrafts(ctx context.Context, in *listTopicDraftsInput) 
 			ID:        repr.ID(row.ID),
 			Title:     row.Title,
 			Summary:   row.Summary,
+			Revision:  row.Revision,
 			CreatedAt: repr.Timestamp(row.CreatedAt),
 			UpdatedAt: repr.Timestamp(row.UpdatedAt),
 		}
@@ -157,6 +174,71 @@ func (d *Drafts) getTopicDraft(ctx context.Context, in *topicDraftInput) (*topic
 	return &topicDraftOutput{Body: body}, nil
 }
 
+// draftFields is the normalized content shared by create and update; the two
+// request bodies differ only in the optimistic-lock fields.
+type draftFields struct {
+	title    string
+	content  string
+	category string
+	sections model.StringSlice
+	covers   model.ImageTokens
+	isNSFW   bool
+	miniApps draftMiniApps
+}
+
+func normalizeDraftFields(
+	title, contentMD string,
+	category *string,
+	sectionSlugs []SectionSlug,
+	isNSFW bool,
+	hashes []ImageHash,
+	polls []TopicDraftPoll,
+	lotteries []TopicDraftLottery,
+) (draftFields, error) {
+	cat := ""
+	if category != nil {
+		cat = *category
+	}
+	sections := model.StringSlice{}
+	if len(sectionSlugs) > 0 {
+		if key, ok := NormalizeSectionKey(string(sectionSlugs[0])); ok {
+			sections = append(sections, key)
+		}
+	}
+	miniApps, err := encodeDraftMiniApps(polls, lotteries)
+	if err != nil {
+		return draftFields{}, err
+	}
+	return draftFields{
+		title:    title,
+		content:  markdown.NormalizeStoredContent(contentMD),
+		category: cat,
+		sections: sections,
+		covers:   coversFromHashes(hashes),
+		isNSFW:   isNSFW,
+		miniApps: miniApps,
+	}, nil
+}
+
+func (f draftFields) blank() bool {
+	return strings.TrimSpace(f.title) == "" && strings.TrimSpace(f.content) == ""
+}
+
+func (f draftFields) toModel(userID int) *model.TopicDraft {
+	return &model.TopicDraft{
+		UserID:           userID,
+		Title:            f.title,
+		Content:          f.content,
+		Category:         f.category,
+		Sections:         f.sections,
+		CoverImages:      f.covers,
+		IsNSFW:           f.isNSFW,
+		Polls:            f.miniApps.polls,
+		Lotteries:        f.miniApps.lotteries,
+		PrizeImageHashes: f.miniApps.prizeImages,
+	}
+}
+
 func (d *Drafts) createTopicDraft(ctx context.Context, in *createTopicDraftInput) (*createTopicDraftOutput, error) {
 	if prob := d.ready(); prob != nil {
 		return nil, prob
@@ -166,8 +248,14 @@ func (d *Drafts) createTopicDraft(ctx context.Context, in *createTopicDraftInput
 		return nil, notFound()
 	}
 
-	content := markdown.NormalizeStoredContent(in.Body.ContentMarkdown)
-	if strings.TrimSpace(in.Body.Title) == "" && strings.TrimSpace(content) == "" {
+	fields, err := normalizeDraftFields(
+		in.Body.Title, in.Body.ContentMarkdown, in.Body.Category,
+		in.Body.Sections, in.Body.IsNSFW, in.Body.CoverImageHashes,
+		in.Body.Polls, in.Body.Lotteries)
+	if err != nil {
+		return nil, problem.Internal(err)
+	}
+	if fields.blank() {
 		min := 1
 		return nil, validationFailed(problem.AtPointer("/content_markdown", problem.ReasonRequired,
 			"a draft needs a title or a body; both were blank after trimming whitespace",
@@ -182,33 +270,10 @@ func (d *Drafts) createTopicDraft(ctx context.Context, in *createTopicDraftInput
 		return nil, draftLimitReached(MaxTopicDraftsPerUser)
 	}
 
-	category := ""
-	if in.Body.Category != nil {
-		category = *in.Body.Category
-	}
-	sections := model.StringSlice{}
-	if len(in.Body.Sections) > 0 {
-		if key, ok := NormalizeSectionKey(string(in.Body.Sections[0])); ok {
-			sections = append(sections, key)
-		}
-	}
-	miniApps, err := encodeDraftMiniApps(in.Body.Polls, in.Body.Lotteries)
-	if err != nil {
-		return nil, problem.Internal(err)
-	}
-	draft := &model.TopicDraft{
-		UserID:           user.ID,
-		Title:            in.Body.Title,
-		Content:          content,
-		Category:         category,
-		Sections:         sections,
-		CoverImages:      coversFromHashes(in.Body.CoverImageHashes),
-		IsNSFW:           in.Body.IsNSFW,
-		Polls:            miniApps.polls,
-		Lotteries:        miniApps.lotteries,
-		PrizeImageHashes: miniApps.prizeImages,
-	}
-	if err := d.drafts.Create(draft); err != nil {
+	draft := fields.toModel(user.ID)
+	draft.Revision = 1
+	rev := model.NewDraftRevision(draft, model.DraftRevisionManual, 1)
+	if err := d.drafts.CreateWithRevision(draft, rev); err != nil {
 		return nil, problem.Internal(err)
 	}
 	body, err := mapDraft(draft)
@@ -219,6 +284,43 @@ func (d *Drafts) createTopicDraft(ctx context.Context, in *createTopicDraftInput
 		Location: "/api/v1/me/topic-drafts/" + strconv.Itoa(draft.ID),
 		Body:     body,
 	}, nil
+}
+
+func (d *Drafts) updateTopicDraft(ctx context.Context, in *updateTopicDraftInput) (*updateTopicDraftOutput, error) {
+	draft, prob := d.ownDraft(ctx, in.DraftID)
+	if prob != nil {
+		return nil, prob
+	}
+	user := v1.User(ctx)
+
+	fields, err := normalizeDraftFields(
+		in.Body.Title, in.Body.ContentMarkdown, in.Body.Category,
+		in.Body.Sections, in.Body.IsNSFW, in.Body.CoverImageHashes,
+		in.Body.Polls, in.Body.Lotteries)
+	if err != nil {
+		return nil, problem.Internal(err)
+	}
+	if fields.blank() {
+		min := 1
+		return nil, validationFailed(problem.AtPointer("/content_markdown", problem.ReasonRequired,
+			"a draft needs a title or a body; both were blank after trimming whitespace",
+			&problem.FieldParams{MinLength: &min}))
+	}
+
+	next := fields.toModel(user.ID)
+	next.ID = draft.ID
+	updated, _, err := d.drafts.PatchDraft(next, in.Body.BaseRevision, in.Body.IsForceOverwrite, in.Body.IsManualSave)
+	if errors.Is(err, repository.ErrDraftRevisionConflict) {
+		return nil, draftRevisionConflict(updated.Revision)
+	}
+	if err != nil {
+		return nil, problem.Internal(err)
+	}
+	body, err := mapDraft(updated)
+	if err != nil {
+		return nil, problem.Internal(err)
+	}
+	return &updateTopicDraftOutput{Body: body}, nil
 }
 
 func (d *Drafts) deleteTopicDraft(ctx context.Context, in *topicDraftInput) (*deleteTopicDraftOutput, error) {
@@ -267,24 +369,35 @@ func (d *Drafts) ownDraft(ctx context.Context, idStr string) (*model.TopicDraft,
 	return draft, nil
 }
 
-func mapDraft(d *model.TopicDraft) (TopicDraft, error) {
-	var category *string
-	if d.Category != "" {
-		c := d.Category
-		category = &c
+func draftCategoryPtr(category string) *string {
+	if category == "" {
+		return nil
 	}
-	sections := make([]SectionSlug, 0, len(d.Sections))
-	for _, s := range d.Sections {
-		sections = append(sections, SectionSlug(s))
+	c := category
+	return &c
+}
+
+func draftSectionList(sections model.StringSlice) []SectionSlug {
+	out := make([]SectionSlug, 0, len(sections))
+	for _, s := range sections {
+		out = append(out, SectionSlug(s))
 	}
-	hashes := make([]ImageHash, 0, len(d.CoverImages))
-	for _, token := range d.CoverImages {
+	return out
+}
+
+func draftCoverHashes(tokens model.ImageTokens) []ImageHash {
+	out := make([]ImageHash, 0, len(tokens))
+	for _, token := range tokens {
 		hash, _, ok := markdown.ParseContentImageRef(token)
 		if !ok {
 			continue
 		}
-		hashes = append(hashes, ImageHash(hash))
+		out = append(out, ImageHash(hash))
 	}
+	return out
+}
+
+func mapDraft(d *model.TopicDraft) (TopicDraft, error) {
 	polls, lotteries, err := decodeDraftMiniApps(d)
 	if err != nil {
 		return TopicDraft{}, err
@@ -294,12 +407,13 @@ func mapDraft(d *model.TopicDraft) (TopicDraft, error) {
 		ID:               repr.ID(d.ID),
 		Title:            d.Title,
 		ContentMarkdown:  d.Content,
-		Category:         category,
-		Sections:         sections,
+		Category:         draftCategoryPtr(d.Category),
+		Sections:         draftSectionList(d.Sections),
 		IsNSFW:           d.IsNSFW,
-		CoverImageHashes: hashes,
+		CoverImageHashes: draftCoverHashes(d.CoverImages),
 		Polls:            polls,
 		Lotteries:        lotteries,
+		Revision:         d.Revision,
 		CreatedAt:        repr.Timestamp(d.CreatedAt),
 		UpdatedAt:        repr.Timestamp(d.UpdatedAt),
 	}, nil

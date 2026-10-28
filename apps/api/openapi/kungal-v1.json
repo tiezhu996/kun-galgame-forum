@@ -8389,6 +8389,34 @@
         ],
         "type": "object"
       },
+      "ListTopicDraftRevisionSummary": {
+        "properties": {
+          "items": {
+            "description": "Members of this page. Empty array, never null.",
+            "items": {
+              "$ref": "#/components/schemas/TopicDraftRevisionSummary"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "description": "Opaque keyset cursor. Omitted on the last page.",
+            "maxLength": 512,
+            "pattern": "^cur_[A-Za-z0-9_-]+$",
+            "type": "string"
+          },
+          "object": {
+            "const": "list",
+            "description": "Type discriminant. Always list.",
+            "maxLength": 4,
+            "type": "string"
+          }
+        },
+        "required": [
+          "object",
+          "items"
+        ],
+        "type": "object"
+      },
       "ListTopicDraftSummary": {
         "properties": {
           "items": {
@@ -21331,6 +21359,12 @@
             "maxItems": 30,
             "type": "array"
           },
+          "revision": {
+            "description": "Optimistic-lock token. Starts at 1 and every write (autosave, snapshot save, restore) bumps it by one. Send the value last read as base_revision on updateTopicDraft.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
           "sections": {
             "description": "The chosen section as a one-item array of a current key. Empty array if none.",
             "items": {
@@ -21346,7 +21380,7 @@
             "type": "string"
           },
           "updated_at": {
-            "description": "Last write time. A draft is never rewritten, so it equals created_at for every draft written by this API.",
+            "description": "Last write time.",
             "format": "date-time",
             "maxLength": 20,
             "minLength": 20,
@@ -21365,6 +21399,7 @@
           "cover_image_hashes",
           "polls",
           "lotteries",
+          "revision",
           "created_at",
           "updated_at"
         ],
@@ -21690,6 +21725,197 @@
         ],
         "type": "object"
       },
+      "TopicDraftRevision": {
+        "properties": {
+          "base_revision": {
+            "description": "The working-copy revision whose content this revision captures.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TopicCategory"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Deprecated category the revision was saved with; null when none."
+          },
+          "content_markdown": {
+            "description": "Body as pinned, Markdown source. Free text; never use it as a decision input.",
+            "maxLength": 100007,
+            "type": "string"
+          },
+          "cover_image_hashes": {
+            "description": "Cover images by image-service hash, in stored order.",
+            "items": {
+              "description": "Image-service content hash of an uploaded image.",
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "maxItems": 9,
+            "type": "array"
+          },
+          "created_at": {
+            "description": "When this revision was pinned.",
+            "format": "date-time",
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+            "type": "string"
+          },
+          "id": {
+            "description": "Revision id. JSON string of a decimal integer.",
+            "maxLength": 20,
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "is_nsfw": {
+            "description": "Whether the revision was marked NSFW.",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TopicDraftRevisionKind",
+            "description": "manual: the author pinned it with is_manual_save=true (and revision 1 at creation). checkpoint: saved automatically, either the other window's content before a force overwrite or the working copy before a restore."
+          },
+          "lotteries": {
+            "description": "Lotteries pinned with the revision, without redemption codes. Empty array if none.",
+            "items": {
+              "$ref": "#/components/schemas/TopicDraftLottery"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "object": {
+            "const": "topic_draft_revision",
+            "description": "Type discriminant. Always topic_draft_revision.",
+            "maxLength": 20,
+            "type": "string"
+          },
+          "polls": {
+            "description": "Polls pinned with the revision. Empty array if none.",
+            "items": {
+              "$ref": "#/components/schemas/TopicDraftPoll"
+            },
+            "maxItems": 30,
+            "type": "array"
+          },
+          "sections": {
+            "description": "The chosen section as a one-item array. Empty array if none.",
+            "items": {
+              "$ref": "#/components/schemas/SectionKey",
+              "description": "Deprecated: read section instead. A section key, or one of the 27 keys retired on 2026-10-24 (g-, t- and o- prefixed), which requests may still send and which map to their successor. Responses carry only current keys."
+            },
+            "maxItems": 3,
+            "type": "array"
+          },
+          "title": {
+            "description": "Title as pinned. Free text; never use it as a decision input.",
+            "maxLength": 233,
+            "type": "string"
+          }
+        },
+        "required": [
+          "object",
+          "id",
+          "kind",
+          "base_revision",
+          "title",
+          "content_markdown",
+          "category",
+          "sections",
+          "is_nsfw",
+          "cover_image_hashes",
+          "polls",
+          "lotteries",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "TopicDraftRevisionKind": {
+        "enum": [
+          "checkpoint",
+          "manual"
+        ],
+        "maxLength": 10,
+        "type": "string",
+        "x-vocabulary-closed": true
+      },
+      "TopicDraftRevisionRestore": {
+        "properties": {
+          "base_revision": {
+            "description": "The revision the editor last read. A restore that lands on a stale draft is refused with DRAFT_REVISION_CONFLICT.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "base_revision"
+        ],
+        "type": "object"
+      },
+      "TopicDraftRevisionSummary": {
+        "properties": {
+          "base_revision": {
+            "description": "The working-copy revision this revision captures.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "created_at": {
+            "description": "When this revision was pinned.",
+            "format": "date-time",
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+            "type": "string"
+          },
+          "id": {
+            "description": "Revision id. JSON string of a decimal integer.",
+            "maxLength": 20,
+            "minLength": 1,
+            "pattern": "^[0-9]+$",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TopicDraftRevisionKind",
+            "description": "manual or checkpoint, as on the full object."
+          },
+          "object": {
+            "const": "topic_draft_revision_summary",
+            "description": "Type discriminant. Always topic_draft_revision_summary.",
+            "maxLength": 28,
+            "type": "string"
+          },
+          "summary": {
+            "description": "First 120 characters of the pinned body: raw Markdown, image tokens included. Free text; never use it as a decision input.",
+            "maxLength": 120,
+            "type": "string"
+          },
+          "title": {
+            "description": "Title as pinned. Free text; never use it as a decision input.",
+            "maxLength": 233,
+            "type": "string"
+          }
+        },
+        "required": [
+          "object",
+          "id",
+          "kind",
+          "base_revision",
+          "title",
+          "summary",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "TopicDraftSummary": {
         "properties": {
           "created_at": {
@@ -21712,6 +21938,12 @@
             "description": "Type discriminant. Always topic_draft_summary.",
             "maxLength": 19,
             "type": "string"
+          },
+          "revision": {
+            "description": "Current optimistic-lock revision of the draft, as on the full object.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
           },
           "summary": {
             "description": "First 120 characters of the body as stored: raw Markdown, image tokens included, cut without regard for word or token boundaries. Free text; never use it as a decision input.",
@@ -21737,8 +21969,88 @@
           "id",
           "title",
           "summary",
+          "revision",
           "created_at",
           "updated_at"
+        ],
+        "type": "object"
+      },
+      "TopicDraftUpdate": {
+        "properties": {
+          "base_revision": {
+            "description": "The revision the editor last read. When it differs from the stored revision the request is refused with DRAFT_REVISION_CONFLICT unless is_force_overwrite is true.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "category": {
+            "$ref": "#/components/schemas/TopicCategory",
+            "description": "Deprecated: the section decides a topic's category."
+          },
+          "content_markdown": {
+            "description": "Draft body as Markdown source, full replacement. Free text; never use it as a decision input.",
+            "maxLength": 100007,
+            "type": "string"
+          },
+          "cover_image_hashes": {
+            "description": "Cover images by image-service hash, in display order.",
+            "items": {
+              "description": "Image-service content hash of an uploaded image.",
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "maxItems": 9,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "is_force_overwrite": {
+            "description": "true wins a revision conflict: the stored content is kept as a 'checkpoint' revision before the overwrite. Ignored when base_revision is current.",
+            "type": "boolean"
+          },
+          "is_manual_save": {
+            "description": "true pins this write as a 'manual' revision the author can diff against and restore; false is a silent autosave. Defaults to false.",
+            "type": "boolean"
+          },
+          "is_nsfw": {
+            "description": "Whether to mark the draft NSFW.",
+            "type": "boolean"
+          },
+          "lotteries": {
+            "description": "Lotteries attached to the draft, in order, without redemption codes.",
+            "items": {
+              "$ref": "#/components/schemas/TopicDraftLottery"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "polls": {
+            "description": "Polls attached to the draft, in order.",
+            "items": {
+              "$ref": "#/components/schemas/TopicDraftPoll"
+            },
+            "maxItems": 30,
+            "type": "array"
+          },
+          "sections": {
+            "description": "The chosen section as a one-item array; same normalization as create.",
+            "items": {
+              "$ref": "#/components/schemas/SectionKey",
+              "description": "Deprecated: read section instead. A section key, or one of the 27 keys retired on 2026-10-24 (g-, t- and o- prefixed), which requests may still send and which map to their successor. Responses carry only current keys."
+            },
+            "maxItems": 3,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "title": {
+            "description": "Draft title, full replacement. Free text; never use it as a decision input.",
+            "maxLength": 233,
+            "type": "string"
+          }
+        },
+        "required": [
+          "base_revision"
         ],
         "type": "object"
       },
@@ -49176,7 +49488,7 @@
         ]
       },
       "post": {
-        "description": "Saves the editor's current buffer as a new draft and returns it. Every field is optional because a draft is unfinished by definition; sections are not checked against category. **This always creates.** There is no update face and this one never overwrites: a draft is a snapshot, the client tracks no draft id, and loading one into the editor and saving again is meant to leave two. Deleting is the only way to make room once the cap is reached.",
+        "description": "Saves the editor's current buffer as a new draft and returns it at revision 1; every new draft is born with one pinned revision. Every field is optional because a draft is unfinished by definition; sections are not checked against category. This is only the FIRST save of a new post: continued saves go to updateTopicDraft, which rewrites one draft instead of minting rows. Deleting is the only way to make room once the cap is reached.",
         "operationId": "createTopicDraft",
         "parameters": [
           {
@@ -49523,6 +49835,544 @@
           }
         ],
         "summary": "Get a topic draft",
+        "tags": [
+          "topics"
+        ]
+      },
+      "patch": {
+        "description": "Rewrites the caller's own draft and bumps its revision by one. Autosave sends is_manual_save=false and leaves no revision; an explicit save sends is_manual_save=true and pins a 'manual' revision the author can diff and restore. base_revision must equal the stored revision. When it does not, nothing is written and DRAFT_REVISION_CONFLICT comes back with current_revision: another window or device saved first. is_force_overwrite=true wins the conflict by pinning that stored content as a 'checkpoint' revision before overwriting it.",
+        "operationId": "updateTopicDraft",
+        "parameters": [
+          {
+            "description": "Draft id.",
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "description": "Draft id.",
+              "maxLength": 19,
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TopicDraftUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicDraft"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND when the draft does not exist or belongs to another author."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "DRAFT_REVISION_CONFLICT when base_revision differs from the stored revision and force is not set."
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_FAILED when the title and the body are both blank after trimming whitespace."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Continue saving one topic draft",
+        "tags": [
+          "topics"
+        ]
+      }
+    },
+    "/me/topic-drafts/{draft_id}/revisions": {
+      "get": {
+        "description": "Lists the draft's pinned revisions, newest first, at most 50: 'manual' revisions from explicit saves (plus revision 1 at creation) and 'checkpoint' revisions kept automatically before a force overwrite or a restore. A draft is private to its author. Another author's draft is NOT_FOUND, never 403: a stranger must not learn that the id exists.",
+        "operationId": "listTopicDraftRevisions",
+        "parameters": [
+          {
+            "description": "Draft id.",
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "description": "Draft id.",
+              "maxLength": 19,
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListTopicDraftRevisionSummary"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND when the draft does not exist or belongs to another author."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List a topic draft's pinned revisions",
+        "tags": [
+          "topics"
+        ]
+      }
+    },
+    "/me/topic-drafts/{draft_id}/revisions/{revision_id}": {
+      "get": {
+        "description": "Returns one revision's full content, as stored. A draft is private to its author. Another author's draft is NOT_FOUND, never 403: a stranger must not learn that the id exists.",
+        "operationId": "getTopicDraftRevision",
+        "parameters": [
+          {
+            "description": "Draft id.",
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "description": "Draft id.",
+              "maxLength": 19,
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Revision id.",
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "description": "Revision id.",
+              "maxLength": 19,
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicDraftRevision"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND when the draft or revision does not exist or belongs to another author."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get one pinned topic draft revision",
+        "tags": [
+          "topics"
+        ]
+      }
+    },
+    "/me/topic-drafts/{draft_id}/revisions/{revision_id}/restore": {
+      "post": {
+        "description": "Pins the draft's current working content as a 'checkpoint' revision, copies the chosen revision's content over the draft, bumps the revision, and returns the draft. The current content is therefore never lost: it becomes the newest checkpoint. base_revision must be current; a stale restore is refused with DRAFT_REVISION_CONFLICT like updateTopicDraft. A draft is private to its author. Another author's draft is NOT_FOUND, never 403: a stranger must not learn that the id exists.",
+        "operationId": "restoreTopicDraftRevision",
+        "parameters": [
+          {
+            "description": "Draft id.",
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "description": "Draft id.",
+              "maxLength": 19,
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Revision id.",
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "description": "Revision id.",
+              "maxLength": 19,
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TopicDraftRevisionRestore"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicDraft"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND when the draft or revision does not exist or belongs to another author."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "DRAFT_REVISION_CONFLICT when base_revision differs from the stored revision."
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Restore a pinned topic draft revision",
         "tags": [
           "topics"
         ]

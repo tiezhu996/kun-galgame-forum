@@ -2655,7 +2655,7 @@ export interface paths {
         put?: never;
         /**
          * Save a topic draft
-         * @description Saves the editor's current buffer as a new draft and returns it. Every field is optional because a draft is unfinished by definition; sections are not checked against category. **This always creates.** There is no update face and this one never overwrites: a draft is a snapshot, the client tracks no draft id, and loading one into the editor and saving again is meant to leave two. Deleting is the only way to make room once the cap is reached.
+         * @description Saves the editor's current buffer as a new draft and returns it at revision 1; every new draft is born with one pinned revision. Every field is optional because a draft is unfinished by definition; sections are not checked against category. This is only the FIRST save of a new post: continued saves go to updateTopicDraft, which rewrites one draft instead of minting rows. Deleting is the only way to make room once the cap is reached.
          */
         post: operations["createTopicDraft"];
         delete?: never;
@@ -2683,6 +2683,70 @@ export interface paths {
          * @description Deletes one of the caller's own drafts. Deleting it again is NOT_FOUND. A draft is private to its author. Another author's draft is NOT_FOUND, never 403: a stranger must not learn that the id exists.
          */
         delete: operations["deleteTopicDraft"];
+        options?: never;
+        head?: never;
+        /**
+         * Continue saving one topic draft
+         * @description Rewrites the caller's own draft and bumps its revision by one. Autosave sends is_manual_save=false and leaves no revision; an explicit save sends is_manual_save=true and pins a 'manual' revision the author can diff and restore. base_revision must equal the stored revision. When it does not, nothing is written and DRAFT_REVISION_CONFLICT comes back with current_revision: another window or device saved first. is_force_overwrite=true wins the conflict by pinning that stored content as a 'checkpoint' revision before overwriting it.
+         */
+        patch: operations["updateTopicDraft"];
+        trace?: never;
+    };
+    "/me/topic-drafts/{draft_id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a topic draft's pinned revisions
+         * @description Lists the draft's pinned revisions, newest first, at most 50: 'manual' revisions from explicit saves (plus revision 1 at creation) and 'checkpoint' revisions kept automatically before a force overwrite or a restore. A draft is private to its author. Another author's draft is NOT_FOUND, never 403: a stranger must not learn that the id exists.
+         */
+        get: operations["listTopicDraftRevisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/topic-drafts/{draft_id}/revisions/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one pinned topic draft revision
+         * @description Returns one revision's full content, as stored. A draft is private to its author. Another author's draft is NOT_FOUND, never 403: a stranger must not learn that the id exists.
+         */
+        get: operations["getTopicDraftRevision"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/topic-drafts/{draft_id}/revisions/{revision_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore a pinned topic draft revision
+         * @description Pins the draft's current working content as a 'checkpoint' revision, copies the chosen revision's content over the draft, bumps the revision, and returns the draft. The current content is therefore never lost: it becomes the newest checkpoint. base_revision must be current; a stale restore is refused with DRAFT_REVISION_CONFLICT like updateTopicDraft. A draft is private to its author. Another author's draft is NOT_FOUND, never 403: a stranger must not learn that the id exists.
+         */
+        post: operations["restoreTopicDraftRevision"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -8900,6 +8964,17 @@ export interface components {
              */
             object: "list";
         };
+        ListTopicDraftRevisionSummary: {
+            /** @description Members of this page. Empty array, never null. */
+            items: components["schemas"]["TopicDraftRevisionSummary"][];
+            /** @description Opaque keyset cursor. Omitted on the last page. */
+            next_cursor?: string;
+            /**
+             * @description Type discriminant. Always list.
+             * @constant
+             */
+            object: "list";
+        };
         ListTopicDraftSummary: {
             /** @description Members of this page. Empty array, never null. */
             items: components["schemas"]["TopicDraftSummary"][];
@@ -13720,13 +13795,18 @@ export interface components {
             object: "topic_draft";
             /** @description Polls the author attached, in order. The web creates them on the topic right after createTopic. Empty array if none. */
             polls: components["schemas"]["TopicDraftPoll"][];
+            /**
+             * Format: int64
+             * @description Optimistic-lock token. Starts at 1 and every write (autosave, snapshot save, restore) bumps it by one. Send the value last read as base_revision on updateTopicDraft.
+             */
+            revision: number;
             /** @description The chosen section as a one-item array of a current key. Empty array if none. */
             sections: components["schemas"]["SectionKey"][];
             /** @description Draft title as stored, empty string when the author has not written one. Free text; never use it as a decision input. */
             title: string;
             /**
              * Format: date-time
-             * @description Last write time. A draft is never rewritten, so it equals created_at for every draft written by this API.
+             * @description Last write time.
              */
             updated_at: string;
         };
@@ -13841,6 +13921,77 @@ export interface components {
             /** @description Poll question as the author left it. Free text; never use it as a decision input. */
             title: string;
         };
+        TopicDraftRevision: {
+            /**
+             * Format: int64
+             * @description The working-copy revision whose content this revision captures.
+             */
+            base_revision: number;
+            /** @description Deprecated category the revision was saved with; null when none. */
+            category: components["schemas"]["TopicCategory"] | null;
+            /** @description Body as pinned, Markdown source. Free text; never use it as a decision input. */
+            content_markdown: string;
+            /** @description Cover images by image-service hash, in stored order. */
+            cover_image_hashes: string[];
+            /**
+             * Format: date-time
+             * @description When this revision was pinned.
+             */
+            created_at: string;
+            /** @description Revision id. JSON string of a decimal integer. */
+            id: string;
+            /** @description Whether the revision was marked NSFW. */
+            is_nsfw: boolean;
+            /** @description manual: the author pinned it with is_manual_save=true (and revision 1 at creation). checkpoint: saved automatically, either the other window's content before a force overwrite or the working copy before a restore. */
+            kind: components["schemas"]["TopicDraftRevisionKind"];
+            /** @description Lotteries pinned with the revision, without redemption codes. Empty array if none. */
+            lotteries: components["schemas"]["TopicDraftLottery"][];
+            /**
+             * @description Type discriminant. Always topic_draft_revision.
+             * @constant
+             */
+            object: "topic_draft_revision";
+            /** @description Polls pinned with the revision. Empty array if none. */
+            polls: components["schemas"]["TopicDraftPoll"][];
+            /** @description The chosen section as a one-item array. Empty array if none. */
+            sections: components["schemas"]["SectionKey"][];
+            /** @description Title as pinned. Free text; never use it as a decision input. */
+            title: string;
+        };
+        /** @enum {string} */
+        TopicDraftRevisionKind: "checkpoint" | "manual";
+        TopicDraftRevisionRestore: {
+            /**
+             * Format: int64
+             * @description The revision the editor last read. A restore that lands on a stale draft is refused with DRAFT_REVISION_CONFLICT.
+             */
+            base_revision: number;
+        };
+        TopicDraftRevisionSummary: {
+            /**
+             * Format: int64
+             * @description The working-copy revision this revision captures.
+             */
+            base_revision: number;
+            /**
+             * Format: date-time
+             * @description When this revision was pinned.
+             */
+            created_at: string;
+            /** @description Revision id. JSON string of a decimal integer. */
+            id: string;
+            /** @description manual or checkpoint, as on the full object. */
+            kind: components["schemas"]["TopicDraftRevisionKind"];
+            /**
+             * @description Type discriminant. Always topic_draft_revision_summary.
+             * @constant
+             */
+            object: "topic_draft_revision_summary";
+            /** @description First 120 characters of the pinned body: raw Markdown, image tokens included. Free text; never use it as a decision input. */
+            summary: string;
+            /** @description Title as pinned. Free text; never use it as a decision input. */
+            title: string;
+        };
         TopicDraftSummary: {
             /**
              * Format: date-time
@@ -13854,6 +14005,11 @@ export interface components {
              * @constant
              */
             object: "topic_draft_summary";
+            /**
+             * Format: int64
+             * @description Current optimistic-lock revision of the draft, as on the full object.
+             */
+            revision: number;
             /** @description First 120 characters of the body as stored: raw Markdown, image tokens included, cut without regard for word or token boundaries. Free text; never use it as a decision input. */
             summary: string;
             /** @description Draft title as stored, empty string when the author has not written one. Free text; never use it as a decision input. */
@@ -13863,6 +14019,33 @@ export interface components {
              * @description Last write time.
              */
             updated_at: string;
+        };
+        TopicDraftUpdate: {
+            /**
+             * Format: int64
+             * @description The revision the editor last read. When it differs from the stored revision the request is refused with DRAFT_REVISION_CONFLICT unless is_force_overwrite is true.
+             */
+            base_revision: number;
+            /** @description Deprecated: the section decides a topic's category. */
+            category?: components["schemas"]["TopicCategory"];
+            /** @description Draft body as Markdown source, full replacement. Free text; never use it as a decision input. */
+            content_markdown?: string;
+            /** @description Cover images by image-service hash, in display order. */
+            cover_image_hashes?: string[];
+            /** @description true wins a revision conflict: the stored content is kept as a 'checkpoint' revision before the overwrite. Ignored when base_revision is current. */
+            is_force_overwrite?: boolean;
+            /** @description true pins this write as a 'manual' revision the author can diff against and restore; false is a silent autosave. Defaults to false. */
+            is_manual_save?: boolean;
+            /** @description Whether to mark the draft NSFW. */
+            is_nsfw?: boolean;
+            /** @description Lotteries attached to the draft, in order, without redemption codes. */
+            lotteries?: components["schemas"]["TopicDraftLottery"][];
+            /** @description Polls attached to the draft, in order. */
+            polls?: components["schemas"]["TopicDraftPoll"][];
+            /** @description The chosen section as a one-item array; same normalization as create. */
+            sections?: components["schemas"]["SectionKey"][];
+            /** @description Draft title, full replacement. Free text; never use it as a decision input. */
+            title?: string;
         };
         TopicEngagement: {
             /**
@@ -31035,6 +31218,398 @@ export interface operations {
             };
             /** @description NOT_FOUND when the draft does not exist or belongs to another author. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateTopicDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Draft id. */
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopicDraftUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicDraft"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description NOT_FOUND when the draft does not exist or belongs to another author. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description DRAFT_REVISION_CONFLICT when base_revision differs from the stored revision and force is not set. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description VALIDATION_FAILED when the title and the body are both blank after trimming whitespace. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listTopicDraftRevisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Draft id. */
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListTopicDraftRevisionSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description NOT_FOUND when the draft does not exist or belongs to another author. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getTopicDraftRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Draft id. */
+                draft_id: string;
+                /** @description Revision id. */
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicDraftRevision"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description NOT_FOUND when the draft or revision does not exist or belongs to another author. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    restoreTopicDraftRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Draft id. */
+                draft_id: string;
+                /** @description Revision id. */
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopicDraftRevisionRestore"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicDraft"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description NOT_FOUND when the draft or revision does not exist or belongs to another author. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description DRAFT_REVISION_CONFLICT when base_revision differs from the stored revision. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

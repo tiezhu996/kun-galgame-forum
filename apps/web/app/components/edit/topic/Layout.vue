@@ -2,10 +2,36 @@
 import { useMediaQuery } from '@vueuse/core'
 import type { KunEditorExpose, KunHeading } from '@kungal/editor-vue'
 import { useTopicEditorStore } from '~/composables/topic/useTopicEditorStore'
+import { useTopicDraftAutosave } from '~/composables/topic/useTopicDraftAutosave'
 import { KUN_EDITOR_TOOLBAR_ITEMS } from '~/constants/editor'
 const tempStore = useTempEditStore()
 const { content, polls, lotteries } = useTopicEditorStore()
 const adapters = useKunEditorAdapters()
+const { status, lastSavedAt, init: initDraftAutosave } = useTopicDraftAutosave()
+
+const draftStatusText = computed(() => {
+  if (status.value === 'saving') {
+    return '正在保存草稿…'
+  }
+  if (status.value === 'conflict') {
+    return '草稿保存冲突，点击处理'
+  }
+  if (status.value === 'error') {
+    return '草稿自动保存失败'
+  }
+  if (lastSavedAt.value) {
+    return `草稿已自动保存 ${new Date(lastSavedAt.value).toLocaleTimeString(
+      'zh-CN',
+      {
+        hour: '2-digit',
+        minute: '2-digit'
+      }
+    )}`
+  }
+  return '草稿将自动保存'
+})
+
+onMounted(() => initDraftAutosave())
 
 const headings = ref<KunHeading[]>([])
 const editorRef = ref<KunEditorExpose | null>(null)
@@ -89,15 +115,40 @@ onBeforeRouteLeave(async () => {
       <div
         class="order-1 ml-auto flex shrink-0 items-center gap-2 sm:order-none sm:ml-0"
       >
-        <KunButton
-          v-if="!tempStore.isTopicRewriting"
-          variant="light"
-          color="primary"
-          @click="isDraftOpen = true"
-        >
-          <KunIcon name="lucide:notebook-pen" class="mr-1 h-4 w-4" />
-          草稿
-        </KunButton>
+        <template v-if="!tempStore.isTopicRewriting">
+          <KunButton
+            variant="light"
+            size="sm"
+            :class="
+              cn(
+                'hidden text-xs sm:flex',
+                status === 'conflict'
+                  ? 'text-warning-600'
+                  : status === 'error'
+                    ? 'text-danger-500'
+                    : 'text-default-400'
+              )
+            "
+            title="查看草稿与版本历史"
+            @click="isDraftOpen = true"
+          >
+            <KunIcon
+              name="lucide:cloud"
+              :class="
+                cn('mr-1 size-3.5', status === 'saving' && 'animate-pulse')
+              "
+            />
+            {{ draftStatusText }}
+          </KunButton>
+          <KunButton
+            variant="light"
+            color="primary"
+            @click="isDraftOpen = true"
+          >
+            <KunIcon name="lucide:notebook-pen" class="mr-1 h-4 w-4" />
+            草稿
+          </KunButton>
+        </template>
         <KunButton color="primary" @click="openPublish">
           <KunIcon name="lucide:send" class="mr-1 h-4 w-4" />
           发布话题

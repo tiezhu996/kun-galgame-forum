@@ -110,6 +110,7 @@ var vocabularies = []vocabulary{
 	{"ToolsetUploadState", []string{"pending", "completed"}},
 	{"TopicSectionKey", []string{"galgame-discussion", "galgame-walkthrough", "review", "news", "resource-seeking", "resource-release", "tech-help", "game-running", "development", "acgn", "daily", "site"}},
 	{"TopicCategory", []string{"galgame", "technique", "others"}},
+	{"TopicDraftRevisionKind", []string{"checkpoint", "manual"}},
 	{"TopicNotificationLevel", []string{"watching", "normal", "muted"}},
 	{"TopicPublishState", []string{"published", "hidden"}},
 	{"TopicRankingSort", []string{"views_desc", "replies_desc", "comments_desc", "likes_desc", "upvotes_desc", "favorites_desc"}},

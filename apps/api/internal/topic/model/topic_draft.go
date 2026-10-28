@@ -60,6 +60,11 @@ type TopicDraft struct {
 	Lotteries        json.RawMessage `gorm:"column:lotteries;serializer:json;type:jsonb;not null;default:'[]'" json:"lotteries"`
 	PrizeImageHashes []string        `gorm:"column:prize_image_hashes;serializer:json;type:jsonb;not null;default:'[]'" json:"prize_image_hashes"`
 
+	// Revision is the optimistic-lock token. Every write (autosave PATCH,
+	// manual snapshot, restore) bumps it by one; a PATCH carrying any other
+	// value than the current one is refused with DRAFT_REVISION_CONFLICT.
+	Revision int `gorm:"column:revision;not null;default:1" json:"revision"`
+
 	CreatedAt time.Time `gorm:"column:created" json:"created"`
 	UpdatedAt time.Time `gorm:"column:updated" json:"updated"`
 }

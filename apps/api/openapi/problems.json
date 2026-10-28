@@ -254,6 +254,15 @@
     },
     {
       "object": "problem_type",
+      "code": "DRAFT_REVISION_CONFLICT",
+      "domain": "kungal",
+      "status": 409,
+      "type": "https://developer.nextmoe.dev/problems/kungal/draft-revision-conflict",
+      "title": "Draft revision conflict",
+      "description": "The draft was written by another request (another window or device) after this request loaded it. Nothing was written. current_revision is the revision now stored; GET the draft, then re-send with force=true to overwrite it (the other write is kept as a checkpoint revision), or load the stored content and edit on top of it."
+    },
+    {
+      "object": "problem_type",
       "code": "IDEMPOTENCY_REQUEST_IN_PROGRESS",
       "domain": "kungal",
       "status": 409,

@@ -214,6 +214,9 @@ export const useTopicSubmitter = () => {
         return
       }
       createKey.clear()
+      // The draft became this topic: drop it best-effort so autosaved drafts
+      // of finished posts do not quietly fill the 30-draft cap.
+      const publishedDraftId = persistStore.draftId
       // Reset before the mini-apps go out: closing the tab halfway must not
       // leave the editor full, one click away from publishing a second topic.
       const miniApps: HeldMiniApp[] = [
@@ -221,6 +224,13 @@ export const useTopicSubmitter = () => {
         ...lotteries.value.map((form) => ({ key: 'lottery' as const, form }))
       ].map(clonePlain)
       persistStore.resetTopicData()
+      if (publishedDraftId) {
+        await settle(
+          api.DELETE('/me/topic-drafts/{draft_id}', {
+            params: { path: { draft_id: publishedDraftId } }
+          })
+        )
+      }
       const failed = await createMiniApps(created.data.id, miniApps)
       if (failed.length) {
         handoff.hold(created.data.id, failed)

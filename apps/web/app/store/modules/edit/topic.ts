@@ -17,6 +17,8 @@ export const usePersistEditTopicStore = defineStore(
     const accessUserIds = ref<EditStorePersist['accessUserIds']>([])
     const polls = ref<EditStorePersist['polls']>([])
     const lotteries = ref<EditStorePersist['lotteries']>([])
+    const draftId = ref<EditStorePersist['draftId']>('')
+    const draftRevision = ref<EditStorePersist['draftRevision']>(0)
 
     const resetTopicData = () => {
       title.value = ''
@@ -29,6 +31,8 @@ export const usePersistEditTopicStore = defineStore(
       accessUserIds.value = []
       polls.value = []
       lotteries.value = []
+      draftId.value = ''
+      draftRevision.value = 0
     }
 
     return {
@@ -43,6 +47,8 @@ export const usePersistEditTopicStore = defineStore(
       accessUserIds,
       polls,
       lotteries,
+      draftId,
+      draftRevision,
       resetTopicData
     }
   },
