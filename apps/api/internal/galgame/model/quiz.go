@@ -40,12 +40,22 @@ func QuizBumpCutoff(now time.Time) time.Time {
 }
 
 type GalgameQuizAnswer struct {
-	ID            int             `gorm:"primaryKey;autoIncrement" json:"id"`
-	QuizID        int             `gorm:"column:quiz_id;not null" json:"quiz_id"`
-	UserID        int             `gorm:"column:user_id;not null" json:"user_id"`
-	Role          string          `gorm:"type:varchar(16);default:answerer" json:"role"`
-	Submitted     json.RawMessage `gorm:"type:jsonb" json:"submitted"`
-	IsCorrect     *bool           `gorm:"column:is_correct" json:"is_correct"`
+	ID        int             `gorm:"primaryKey;autoIncrement" json:"id"`
+	QuizID    int             `gorm:"column:quiz_id;not null" json:"quiz_id"`
+	UserID    int             `gorm:"column:user_id;not null" json:"user_id"`
+	Role      string          `gorm:"type:varchar(16);default:answerer" json:"role"`
+	Submitted json.RawMessage `gorm:"type:jsonb" json:"submitted"`
+	IsCorrect *bool           `gorm:"column:is_correct" json:"is_correct"`
+	// FirstSubmitted / FirstIsCorrect freeze the first attempt: public
+	// answer_count, correct_count and the author notification count that
+	// attempt and only that attempt.
+	FirstSubmitted json.RawMessage `gorm:"column:first_submitted;type:jsonb" json:"first_submitted"`
+	FirstIsCorrect *bool           `gorm:"column:first_is_correct" json:"first_is_correct"`
+	// BestSubmitted / BestIsCorrect track the best attempt; BestIsCorrect is
+	// sticky once true (a later wrong re-practice never un-masters the quiz).
+	BestSubmitted json.RawMessage `gorm:"column:best_submitted;type:jsonb" json:"best_submitted"`
+	BestIsCorrect bool            `gorm:"column:best_is_correct;not null;default:false" json:"best_is_correct"`
+	BestAt        *time.Time      `gorm:"column:best_at" json:"best_at"`
 	Rewarded      bool            `gorm:"column:rewarded;default:false" json:"rewarded"`
 	QualityRating *int            `gorm:"column:quality_rating" json:"quality_rating"`
 

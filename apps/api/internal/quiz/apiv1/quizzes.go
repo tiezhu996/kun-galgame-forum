@@ -392,11 +392,27 @@ func (s *Service) updateQuiz(ctx context.Context, in *patchQuizInput) (*quizOutp
 				return err
 			}
 			for _, a := range answers {
-				ok, gerr := grade(qtype, newRaw, a.Submitted)
+				latestOK, gerr := grade(qtype, newRaw, a.Submitted)
 				if gerr != nil {
 					return gerr
 				}
-				if err := s.store.SetAnswerCorrect(tx, a.ID, ok); err != nil {
+				firstRaw := a.FirstSubmitted
+				if len(firstRaw) == 0 {
+					firstRaw = a.Submitted
+				}
+				firstOK, gerr := grade(qtype, newRaw, firstRaw)
+				if gerr != nil {
+					return gerr
+				}
+				bestRaw := a.BestSubmitted
+				if len(bestRaw) == 0 {
+					bestRaw = a.Submitted
+				}
+				bestOK, gerr := grade(qtype, newRaw, bestRaw)
+				if gerr != nil {
+					return gerr
+				}
+				if err := s.store.SetAnswerGrades(tx, a.ID, latestOK, firstOK, bestOK); err != nil {
 					return err
 				}
 			}

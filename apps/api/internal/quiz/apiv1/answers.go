@@ -2,7 +2,7 @@ package apiv1
 
 import (
 	"context"
-	"errors"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -83,7 +83,7 @@ func (s *Service) listQuizAnswers(ctx context.Context, in *listAnswersInput) (*l
 	show := seeKey(row, viewer, own)
 	items := make([]QuizAnswer, 0, len(rows))
 	for _, r := range rows {
-		item, p := s.answerItem(row.Type, r, users, show)
+		item, p := s.answerItem(row.Type, r, users, show, false)
 		if p != nil {
 			return nil, p
 		}
@@ -114,7 +114,7 @@ func invalidCursor() *problem.Problem {
 	)
 }
 
-func (s *Service) answerItem(qtype string, r model.GalgameQuizAnswer, users map[int]userclient.User, show bool) (QuizAnswer, *problem.Problem) {
+func (s *Service) answerItem(qtype string, r model.GalgameQuizAnswer, users map[int]userclient.User, show, own bool) (QuizAnswer, *problem.Problem) {
 	u, ok := users[r.UserID]
 	if !ok {
 		u = userclient.User{ID: r.UserID}
@@ -122,6 +122,25 @@ func (s *Service) answerItem(qtype string, r model.GalgameQuizAnswer, users map[
 	item := QuizAnswer{
 		Object: "quiz_answer", ID: repr.ID(r.ID), QuizID: repr.ID(r.QuizID),
 		Answerer: repr.NewUserRef(s.cdn, u), AnsweredAt: repr.Timestamp(r.CreatedAt),
+	}
+	if own {
+		last := repr.Timestamp(r.UpdatedAt)
+		item.LastAnsweredAt = &last
+		if len(r.BestSubmitted) > 0 {
+			bestSub, err := decodeSubmission(qtype, r.BestSubmitted)
+			if err != nil {
+				return QuizAnswer{}, problem.Internal(err)
+			}
+			bestAt := r.CreatedAt
+			if r.BestAt != nil {
+				bestAt = *r.BestAt
+			}
+			bestOK := r.BestIsCorrect
+			item.Best = &QuizAnswerBest{
+				Object: "quiz_answer_best", IsCorrect: &bestOK,
+				Submission: &bestSub, AnsweredAt: repr.Timestamp(bestAt),
+			}
+		}
 	}
 	if show {
 		sub, err := decodeSubmission(qtype, r.Submitted)
@@ -149,13 +168,6 @@ func (s *Service) createQuizAnswer(ctx context.Context, in *createAnswerInput) (
 	if user.ID == row.UserID {
 		return nil, selfAnswerForbidden()
 	}
-	existing, err := s.store.FindAnswer(row.ID, user.ID)
-	if err != nil {
-		return nil, problem.Internal(err)
-	}
-	if existing != nil {
-		return nil, alreadyExists()
-	}
 	choices, err := parseChoices(row.Type, row.Content)
 	if err != nil {
 		return nil, problem.Internal(err)
@@ -171,30 +183,35 @@ func (s *Service) createQuizAnswer(ctx context.Context, in *createAnswerInput) (
 	if err != nil {
 		return nil, problem.Internal(err)
 	}
-	ans := &model.GalgameQuizAnswer{
-		QuizID: row.ID, UserID: user.ID, Role: "answerer",
-		Submitted: submitted, IsCorrect: boolPtr(correct),
-	}
+	var up *repository.AnswerUpsert
 	err = s.store.InTx(func(tx *gorm.DB) error {
-		if err := s.store.InsertAnswer(tx, ans); err != nil {
+		u, err := s.store.UpsertAnswer(tx, row.ID, user.ID, submitted, correct)
+		if err != nil {
 			return err
+		}
+		up = u
+		if !u.Inserted {
+			return nil
 		}
 		if err := s.store.BumpAnswerStats(tx, row.ID, correct); err != nil {
 			return err
 		}
-		return s.store.NotifyAnswered(tx, user.ID, row.UserID, ans, repository.AnswerNotice(row.Type, choices, toInts(in.Body.ChoiceIndexes), in.Body.JudgeChoice, correct))
+		notice := repository.AnswerNotice(row.Type, choices, toInts(in.Body.ChoiceIndexes), in.Body.JudgeChoice, correct)
+		return s.store.NotifyAnswered(tx, user.ID, row.UserID,
+			&model.GalgameQuizAnswer{ID: u.ID, QuizID: row.ID}, notice)
 	})
 	if err != nil {
-		if errors.Is(err, repository.ErrAlreadyExists) {
-			return nil, alreadyExists()
-		}
+		return nil, problem.Internal(err)
+	}
+	saved, err := s.store.FindAnswer(row.ID, user.ID)
+	if err != nil {
 		return nil, problem.Internal(err)
 	}
 	more, p := s.lookupUsers(ctx, []int{user.ID})
 	if p != nil {
 		return nil, p
 	}
-	item, p := s.answerItem(row.Type, *ans, more, true)
+	item, p := s.answerItem(row.Type, *saved, more, true, true)
 	if p != nil {
 		return nil, p
 	}
@@ -202,10 +219,17 @@ func (s *Service) createQuizAnswer(ctx context.Context, in *createAnswerInput) (
 	if p != nil {
 		return nil, p
 	}
-	return &createAnswerOutput{
+	out := &createAnswerOutput{
 		Location: "/api/v1/quizzes/" + strconv.Itoa(row.ID),
-		Body:     QuizAnswerResult{Object: "quiz_answer_result", Answer: &item, Solution: sol},
-	}, nil
+		Body: QuizAnswerResult{
+			Object: "quiz_answer_result", IsFirstAttempt: up.Inserted,
+			Answer: &item, Solution: sol,
+		},
+	}
+	if up.Inserted {
+		out.Status = http.StatusCreated
+	} else {
+		out.Status = http.StatusOK
+	}
+	return out, nil
 }
-
-func boolPtr(b bool) *bool { return &b }

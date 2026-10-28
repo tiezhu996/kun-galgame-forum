@@ -13682,7 +13682,7 @@
       "QuizAnswer": {
         "properties": {
           "answered_at": {
-            "description": "Time they answered.",
+            "description": "Time of their first attempt.",
             "format": "date-time",
             "maxLength": 20,
             "minLength": 20,
@@ -13693,6 +13693,10 @@
             "$ref": "#/components/schemas/UserRef",
             "description": "User who answered."
           },
+          "best": {
+            "$ref": "#/components/schemas/QuizAnswerBest",
+            "description": "Their best attempt. Present only on the caller's own answer."
+          },
           "id": {
             "description": "Answer row id.",
             "maxLength": 20,
@@ -13701,11 +13705,19 @@
             "type": "string"
           },
           "is_correct": {
-            "description": "Whether they were correct. null when the caller may not see the answer key.",
+            "description": "Whether the latest attempt was correct. null when the caller may not see the answer key.",
             "type": [
               "boolean",
               "null"
             ]
+          },
+          "last_answered_at": {
+            "description": "Time of the latest attempt. Present only on the caller's own answer.",
+            "format": "date-time",
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+            "type": "string"
           },
           "object": {
             "const": "quiz_answer",
@@ -13729,7 +13741,7 @@
                 "type": "null"
               }
             ],
-            "description": "What they submitted. null when the caller may not see the answer key."
+            "description": "Their latest submission. null when the caller may not see the answer key."
           }
         },
         "required": [
@@ -13739,6 +13751,49 @@
           "answerer",
           "submission",
           "is_correct",
+          "answered_at"
+        ],
+        "type": "object"
+      },
+      "QuizAnswerBest": {
+        "properties": {
+          "answered_at": {
+            "description": "Time of the best attempt.",
+            "format": "date-time",
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+            "type": "string"
+          },
+          "is_correct": {
+            "description": "Whether the best attempt was correct. Sticky: once true it stays true even if a later re-practice is wrong. Same nullability as QuizAnswer.is_correct for schema consistency; non-null whenever this object is present.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "object": {
+            "const": "quiz_answer_best",
+            "description": "Type discriminant. Always quiz_answer_best.",
+            "maxLength": 16,
+            "type": "string"
+          },
+          "submission": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuizSubmission"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the best attempt submitted."
+          }
+        },
+        "required": [
+          "object",
+          "is_correct",
+          "submission",
           "answered_at"
         ],
         "type": "object"
@@ -13754,7 +13809,11 @@
                 "type": "null"
               }
             ],
-            "description": "The row just written. Never null here; nullable because the detail's viewer.answer is."
+            "description": "The row after this request. Never null here; nullable because the detail's viewer.answer is."
+          },
+          "is_first_attempt": {
+            "description": "True for the caller's first attempt on this quiz (201 Created); false for a re-practice that overwrote the latest attempt (200 OK). Public counts, the answer roster and the author notification move only when this is true.",
+            "type": "boolean"
           },
           "object": {
             "const": "quiz_answer_result",
@@ -13776,6 +13835,7 @@
         },
         "required": [
           "object",
+          "is_first_attempt",
           "answer",
           "solution"
         ],
@@ -14440,8 +14500,15 @@
             "description": "Whether the caller has an answerer row. The author's author row does not count.",
             "type": "boolean"
           },
+          "has_correct_attempt": {
+            "description": "Whether any attempt was ever correct. Sticky; this drives the wrong-set marker. null when they have not answered.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "is_correct": {
-            "description": "Whether the caller was correct. null when they have not answered.",
+            "description": "Whether the latest attempt was correct. null when they have not answered.",
             "type": [
               "boolean",
               "null"
@@ -14450,7 +14517,8 @@
         },
         "required": [
           "has_answered",
-          "is_correct"
+          "is_correct",
+          "has_correct_attempt"
         ],
         "type": "object"
       },
@@ -52936,7 +53004,7 @@
     },
     "/quizzes/{quiz_id}/answers": {
       "get": {
-        "description": "Lists answerer rows newest first as a cursor collection. submission and is_correct are null unless the caller has answered, is the author, or can_edit. Unrenderable answerers are omitted.",
+        "description": "Lists answerer rows newest first as a cursor collection, one row per answerer. submission and is_correct reflect the answerer's latest attempt. They are null unless the caller has answered, is the author, or can_edit. Unrenderable answerers are omitted.",
         "operationId": "listQuizAnswers",
         "parameters": [
           {
@@ -53075,7 +53143,7 @@
         ]
       },
       "post": {
-        "description": "Records the caller's answer. Idempotency-Key is required. The caller is checked against the account service's current record first: a banned account is ACCOUNT_BANNED, and a failure of that lookup is SERVICE_UNAVAILABLE with nothing written. The author cannot answer their own quiz. A second answer is ALREADY_EXISTS. Location is the quiz path.",
+        "description": "Records the caller's attempt. Idempotency-Key is required. The caller is checked against the account service's current record first: a banned account is ACCOUNT_BANNED, and a failure of that lookup is SERVICE_UNAVAILABLE with nothing written. The author cannot answer their own quiz. The first attempt returns 201 and is the only attempt that moves answer_count, correct_count, the answer roster bump and the author notification. Every later attempt (re-practice) returns 200, overwrites only the caller's latest result and advances their sticky best result; the row stays one per user. Location is the quiz path.",
         "operationId": "createQuizAnswer",
         "parameters": [
           {
@@ -53115,6 +53183,26 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizAnswerResult"
+                }
+              }
+            },
+            "description": "Re-practice accepted: the caller's latest attempt replaced the previous one. The body is the same as 201, with is_first_attempt false; public counts and the author notification did not move.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "description": "Absolute path of the quiz, such as /api/v1/quizzes/12.",
+                  "format": "uri-reference",
+                  "maxLength": 64,
+                  "type": "string"
+                }
+              }
+            }
+          },
           "201": {
             "content": {
               "application/json": {
@@ -53183,7 +53271,7 @@
                 }
               }
             },
-            "description": "ALREADY_EXISTS, IDEMPOTENCY_KEY_REUSED or IDEMPOTENCY_REQUEST_IN_PROGRESS."
+            "description": "IDEMPOTENCY_KEY_REUSED or IDEMPOTENCY_REQUEST_IN_PROGRESS."
           },
           "413": {
             "content": {

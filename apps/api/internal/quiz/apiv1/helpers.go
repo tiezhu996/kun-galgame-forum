@@ -77,10 +77,6 @@ func selfAnswerForbidden() *problem.Problem {
 	return problem.New(problem.CodeSelfAnswerForbidden, "Users cannot answer a quiz they authored.")
 }
 
-func alreadyExists() *problem.Problem {
-	return problem.New(problem.CodeAlreadyExists, "The same subject already has a live record for this target.")
-}
-
 func quizAnswerRequired() *problem.Problem {
 	return problem.New(problem.CodeQuizAnswerRequired, "The caller must already have answered this quiz; the author cannot answer their own quiz.")
 }

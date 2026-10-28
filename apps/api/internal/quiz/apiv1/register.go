@@ -140,8 +140,9 @@ func registerAnswers(api huma.API, svc *Service) {
 		Method:      http.MethodGet,
 		Path:        "/quizzes/{quiz_id}/answers",
 		Summary:     "List answers to a quiz",
-		Description: "Lists answerer rows newest first as a cursor collection. " +
-			"submission and is_correct are null unless the caller has answered, is the author, or can_edit. " +
+		Description: "Lists answerer rows newest first as a cursor collection, one row per answerer. " +
+			"submission and is_correct reflect the answerer's latest attempt. " +
+			"They are null unless the caller has answered, is the author, or can_edit. " +
 			"Unrenderable answerers are omitted.",
 		Tags: []string{tagQuizzes},
 		Responses: problemResponses(map[int]string{
@@ -156,18 +157,40 @@ func registerAnswers(api huma.API, svc *Service) {
 		Path:          "/quizzes/{quiz_id}/answers",
 		Summary:       "Answer a quiz",
 		DefaultStatus: http.StatusCreated,
-		Description: "Records the caller's answer. Idempotency-Key is required. " + activeCheck +
-			"The author cannot answer their own quiz. A second answer is ALREADY_EXISTS. " +
+		Description: "Records the caller's attempt. Idempotency-Key is required. " + activeCheck +
+			"The author cannot answer their own quiz. The first attempt returns 201 and is the only attempt that " +
+			"moves answer_count, correct_count, the answer roster bump and the author notification. " +
+			"Every later attempt (re-practice) returns 200, overwrites only the caller's latest result and advances " +
+			"their sticky best result; the row stays one per user. " +
 			"Location is the quiz path.",
 		Tags: []string{tagQuizzes},
 		Responses: problemResponses(map[int]string{
 			400: "INVALID_PARAMETER when Idempotency-Key is missing or malformed.",
 			403: "SELF_ANSWER_FORBIDDEN or ACCOUNT_BANNED.",
 			404: quizNotFound,
-			409: "ALREADY_EXISTS, IDEMPOTENCY_KEY_REUSED or IDEMPOTENCY_REQUEST_IN_PROGRESS.",
+			409: "IDEMPOTENCY_KEY_REUSED or IDEMPOTENCY_REQUEST_IN_PROGRESS.",
 			422: "VALIDATION_FAILED.",
 		}),
 	})), svc.createQuizAnswer)
+	addRepeatSuccessResponse(api, "/quizzes/{quiz_id}/answers")
+}
+
+// addRepeatSuccessResponse mirrors the auto-generated 201 response onto 200.
+// huma only binds the output body schema to DefaultStatus; the dynamic status
+// (createAnswerOutput.Status) needs its own response entry with the same schema.
+func addRepeatSuccessResponse(api huma.API, path string) {
+	post := api.OpenAPI().Paths[path]
+	if post == nil || post.Post == nil {
+		return
+	}
+	created := post.Post.Responses[strconv.Itoa(http.StatusCreated)]
+	if created == nil {
+		return
+	}
+	repeat := *created
+	repeat.Description = "Re-practice accepted: the caller's latest attempt replaced the previous one. " +
+		"The body is the same as 201, with is_first_attempt false; public counts and the author notification did not move."
+	post.Post.Responses[strconv.Itoa(http.StatusOK)] = &repeat
 }
 
 func registerEngage(api huma.API, svc *Service) {

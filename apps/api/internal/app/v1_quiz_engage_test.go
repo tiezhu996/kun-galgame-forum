@@ -21,15 +21,142 @@ func TestV1CreateQuizAnswerSelfForbidden(t *testing.T) {
 	}
 }
 
-func TestV1CreateQuizAnswerAlreadyExists(t *testing.T) {
+func TestV1CreateQuizAnswerRepeatPractice(t *testing.T) {
 	f := newQuizFix(t, nil)
+	// Bob's seeded first attempt on g2QMain was wrong ({"value":0}); the seed
+	// quiz has 4 answerers and 1 correct.
+	correct := func(body map[string]any) {
+		t.Helper()
+		ans, _ := body["answer"].(map[string]any)
+		if ans == nil || ans["is_correct"] != true {
+			t.Fatalf("answer %+v", ans)
+		}
+	}
+
 	resp, got := f.qz(t, http.MethodPost, "/api/v1/quizzes/"+idStr(g2QMain)+"/answers",
 		"/quizzes/{quiz_id}/answers", "sess-bob", keyUUID(21),
-		map[string]any{"choice_indexes": []int{0}, "is_statement_true": nil})
-	wantCode(t, resp, got, http.StatusConflict, problem.CodeAlreadyExists)
+		map[string]any{"choice_indexes": []int{1}, "is_statement_true": nil})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("re-practice %d %+v", resp.StatusCode, got)
+	}
+	if got["is_first_attempt"] != false {
+		t.Errorf("is_first_attempt %v", got["is_first_attempt"])
+	}
+	correct(got)
+	ans, _ := got["answer"].(map[string]any)
+	best, _ := ans["best"].(map[string]any)
+	if best == nil || best["is_correct"] != true {
+		t.Errorf("best %+v", ans["best"])
+	}
+	if ans["last_answered_at"] == nil {
+		t.Error("missing last_answered_at")
+	}
 	if n := f.scalar(t, `SELECT COUNT(*) FROM galgame_quiz_answer WHERE quiz_id = ? AND user_id = ? AND role = 'answerer'`,
 		g2QMain, w3UserBob); n != 1 {
-		t.Errorf("second row %d", n)
+		t.Errorf("answerer rows %d", n)
+	}
+	if n := f.scalar(t, `SELECT answer_count FROM galgame_quiz WHERE id = ?`, g2QMain); n != 4 {
+		t.Errorf("answer_count moved on re-practice: %d", n)
+	}
+	if n := f.scalar(t, `SELECT correct_count FROM galgame_quiz WHERE id = ?`, g2QMain); n != 1 {
+		t.Errorf("correct_count moved on re-practice: %d", n)
+	}
+	if n := f.scalar(t, `SELECT COUNT(*) FROM message WHERE sender_id = ? AND receiver_id = ? AND type = 'quiz-answered'
+		AND link = ?`, w3UserBob, w3UserAlice, "/galgame-quiz/"+idStr(g2QMain)); n != 0 {
+		t.Errorf("repeat answer notified the author: %d", n)
+	}
+
+	// A quality rating must survive later re-practice.
+	if r, b := f.qz(t, http.MethodPut, "/api/v1/quizzes/"+idStr(g2QMain)+"/quality-rating",
+		"/quizzes/{quiz_id}/quality-rating", "sess-bob", "", map[string]any{"rating": 8}); r.StatusCode != http.StatusOK {
+		t.Fatalf("rate %d %+v", r.StatusCode, b)
+	}
+
+	// Wrong again: the latest grade flips, the best grade stays sticky.
+	resp, got = f.qz(t, http.MethodPost, "/api/v1/quizzes/"+idStr(g2QMain)+"/answers",
+		"/quizzes/{quiz_id}/answers", "sess-bob", keyUUID(210),
+		map[string]any{"choice_indexes": []int{0}, "is_statement_true": nil})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("second re-practice %d %+v", resp.StatusCode, got)
+	}
+	ans, _ = got["answer"].(map[string]any)
+	if ans["is_correct"] != false {
+		t.Errorf("latest grade %v", ans["is_correct"])
+	}
+	best, _ = ans["best"].(map[string]any)
+	if best["is_correct"] != true {
+		t.Errorf("sticky best %v", best)
+	}
+	if n := f.scalar(t, `SELECT answer_count * 100 + correct_count FROM galgame_quiz WHERE id = ?`, g2QMain); n != 401 {
+		t.Error("public counts moved during re-practice")
+	}
+	if n := f.scalar(t, `SELECT quality_rating FROM galgame_quiz_answer WHERE quiz_id = ? AND user_id = ?`, g2QMain, w3UserBob); n != 8 {
+		t.Errorf("quality rating lost on re-practice: %d", n)
+	}
+
+	resp, body := f.qz(t, http.MethodGet, "/api/v1/quizzes/"+idStr(g2QMain), "/quizzes/{quiz_id}", "sess-bob", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("detail %d", resp.StatusCode)
+	}
+	qv, _ := body["viewer"].(map[string]any)
+	if qv["quality_rating"].(float64) != 8 {
+		t.Errorf("viewer quality %v", qv["quality_rating"])
+	}
+	self, _ := qv["answer"].(map[string]any)
+	if self["is_correct"] != false {
+		t.Errorf("detail latest %v", self["is_correct"])
+	}
+	selfBest, _ := self["best"].(map[string]any)
+	if selfBest["is_correct"] != true {
+		t.Errorf("detail best %v", selfBest)
+	}
+
+	// The answered list marks the quiz by latest grade and sticky best grade.
+	_, body = f.qz(t, http.MethodGet, "/api/v1/me/answered-quizzes?limit=100",
+		"/me/answered-quizzes", "sess-bob", "", nil)
+	for _, raw := range body["items"].([]any) {
+		it, _ := raw.(map[string]any)
+		if strID(it["id"]) != idStr(g2QMain) {
+			continue
+		}
+		v, _ := it["viewer"].(map[string]any)
+		if v["has_answered"] != true || v["is_correct"] != false || v["has_correct_attempt"] != true {
+			t.Errorf("answered-list viewer %+v", v)
+		}
+		return
+	}
+	t.Error("g2QMain missing from bob's answered list")
+}
+
+func TestV1CreateQuizAnswerFirstAttemptCountsOnly(t *testing.T) {
+	f := newQuizFix(t, nil)
+	// First attempt wrong, re-practice correct: the author's correct_count
+	// keeps following the first attempt (0 correct of 1 answerer).
+	resp, got := f.qz(t, http.MethodPost, "/api/v1/quizzes/"+idStr(g2QJudge)+"/answers",
+		"/quizzes/{quiz_id}/answers", "sess-alice", keyUUID(23),
+		map[string]any{"choice_indexes": []int{}, "is_statement_true": false})
+	if resp.StatusCode != http.StatusCreated || got["is_first_attempt"] != true {
+		t.Fatalf("first %d %+v", resp.StatusCode, got)
+	}
+	if n := f.scalar(t, `SELECT answer_count * 100 + correct_count FROM galgame_quiz WHERE id = ?`, g2QJudge); n != 100 {
+		t.Error("first attempt did not count once")
+	}
+	if n := f.scalar(t, `SELECT COUNT(*) FROM message WHERE sender_id = ? AND receiver_id = ? AND type = 'quiz-answered'
+		AND link = ?`, w3UserAlice, w3UserGrant, "/galgame-quiz/"+idStr(g2QJudge)); n != 1 {
+		t.Error("first attempt did not notify the author once")
+	}
+	resp, got = f.qz(t, http.MethodPost, "/api/v1/quizzes/"+idStr(g2QJudge)+"/answers",
+		"/quizzes/{quiz_id}/answers", "sess-alice", keyUUID(24),
+		map[string]any{"choice_indexes": []int{}, "is_statement_true": true})
+	if resp.StatusCode != http.StatusOK || got["is_first_attempt"] != false {
+		t.Fatalf("repeat %d %+v", resp.StatusCode, got)
+	}
+	if n := f.scalar(t, `SELECT answer_count * 100 + correct_count FROM galgame_quiz WHERE id = ?`, g2QJudge); n != 100 {
+		t.Errorf("public counts moved on a later correct re-practice: %d", n)
+	}
+	if n := f.scalar(t, `SELECT COUNT(*) FROM message WHERE sender_id = ? AND receiver_id = ? AND type = 'quiz-answered'
+		AND link = ?`, w3UserAlice, w3UserGrant, "/galgame-quiz/"+idStr(g2QJudge)); n != 1 {
+		t.Error("re-practice notified the author again")
 	}
 }
 
@@ -47,27 +174,34 @@ func TestV1CreateQuizAnswerConcurrentUnique(t *testing.T) {
 			defer wg.Done()
 			resp, out := f.qz(t, http.MethodPost, "/api/v1/quizzes/"+idStr(g2QJudge)+"/answers",
 				"/quizzes/{quiz_id}/answers", "sess-bob", keyUUID(30+i), body)
-			code, _ := out["code"].(string)
+			first, _ := out["is_first_attempt"].(bool)
 			mu.Lock()
-			got = append(got, strconv.Itoa(resp.StatusCode)+":"+code)
+			got = append(got, strconv.Itoa(resp.StatusCode)+":"+strconv.FormatBool(first))
 			mu.Unlock()
 		}()
 	}
 	wg.Wait()
-	ok, conflict := 0, 0
+	created, repeated := 0, 0
 	for _, g := range got {
 		switch g {
-		case "201:":
-			ok++
-		case "409:ALREADY_EXISTS":
-			conflict++
+		case "201:true":
+			created++
+		case "200:false":
+			repeated++
 		}
 	}
-	if ok+conflict != 2 || ok == 0 {
+	if created != 1 || repeated != 1 {
 		t.Errorf("concurrent answers %v", got)
 	}
 	if n := f.scalar(t, `SELECT COUNT(*) FROM galgame_quiz_answer WHERE quiz_id = ? AND role = 'answerer'`, g2QJudge); n != 1 {
 		t.Errorf("answerer rows %d", n)
+	}
+	if n := f.scalar(t, `SELECT answer_count FROM galgame_quiz WHERE id = ?`, g2QJudge); n != 1 {
+		t.Errorf("answer_count %d", n)
+	}
+	if n := f.scalar(t, `SELECT COUNT(*) FROM message WHERE sender_id = ? AND receiver_id = ? AND type = 'quiz-answered'`,
+		w3UserBob, w3UserGrant); n != 1 {
+		t.Errorf("notification count %d", n)
 	}
 }
 

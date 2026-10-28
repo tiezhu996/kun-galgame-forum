@@ -393,7 +393,7 @@ var interactionDeletes = []interactionDelete{
 	{table: "galgame_post_like"},
 	{table: "galgame_quiz_answer", recounts: []recountSpec{
 		{"galgame_quiz", "answer_count", "quiz_id", "COUNT(*) FILTER (WHERE role = 'answerer')"},
-		{"galgame_quiz", "correct_count", "quiz_id", "COUNT(*) FILTER (WHERE is_correct)"},
+		{"galgame_quiz", "correct_count", "quiz_id", "COUNT(*) FILTER (WHERE role = 'answerer' AND first_is_correct)"},
 		{"galgame_quiz", "quality_sum", "quiz_id", "COALESCE(SUM(quality_rating), 0)"},
 		{"galgame_quiz", "quality_count", "quiz_id", "COUNT(*) FILTER (WHERE quality_rating > 0)"},
 	}},

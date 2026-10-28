@@ -3185,13 +3185,13 @@ export interface paths {
         };
         /**
          * List answers to a quiz
-         * @description Lists answerer rows newest first as a cursor collection. submission and is_correct are null unless the caller has answered, is the author, or can_edit. Unrenderable answerers are omitted.
+         * @description Lists answerer rows newest first as a cursor collection, one row per answerer. submission and is_correct reflect the answerer's latest attempt. They are null unless the caller has answered, is the author, or can_edit. Unrenderable answerers are omitted.
          */
         get: operations["listQuizAnswers"];
         put?: never;
         /**
          * Answer a quiz
-         * @description Records the caller's answer. Idempotency-Key is required. The caller is checked against the account service's current record first: a banned account is ACCOUNT_BANNED, and a failure of that lookup is SERVICE_UNAVAILABLE with nothing written. The author cannot answer their own quiz. A second answer is ALREADY_EXISTS. Location is the quiz path.
+         * @description Records the caller's attempt. Idempotency-Key is required. The caller is checked against the account service's current record first: a banned account is ACCOUNT_BANNED, and a failure of that lookup is SERVICE_UNAVAILABLE with nothing written. The author cannot answer their own quiz. The first attempt returns 201 and is the only attempt that moves answer_count, correct_count, the answer roster bump and the author notification. Every later attempt (re-practice) returns 200, overwrites only the caller's latest result and advances their sticky best result; the row stays one per user. Location is the quiz path.
          */
         post: operations["createQuizAnswer"];
         delete?: never;
@@ -10976,15 +10976,22 @@ export interface components {
         QuizAnswer: {
             /**
              * Format: date-time
-             * @description Time they answered.
+             * @description Time of their first attempt.
              */
             answered_at: string;
             /** @description User who answered. */
             answerer: components["schemas"]["UserRef"];
+            /** @description Their best attempt. Present only on the caller's own answer. */
+            best?: components["schemas"]["QuizAnswerBest"];
             /** @description Answer row id. */
             id: string;
-            /** @description Whether they were correct. null when the caller may not see the answer key. */
+            /** @description Whether the latest attempt was correct. null when the caller may not see the answer key. */
             is_correct: boolean | null;
+            /**
+             * Format: date-time
+             * @description Time of the latest attempt. Present only on the caller's own answer.
+             */
+            last_answered_at?: string;
             /**
              * @description Type discriminant. Always quiz_answer.
              * @constant
@@ -10992,12 +10999,30 @@ export interface components {
             object: "quiz_answer";
             /** @description Id of the quiz. */
             quiz_id: string;
-            /** @description What they submitted. null when the caller may not see the answer key. */
+            /** @description Their latest submission. null when the caller may not see the answer key. */
+            submission: components["schemas"]["QuizSubmission"] | null;
+        };
+        QuizAnswerBest: {
+            /**
+             * Format: date-time
+             * @description Time of the best attempt.
+             */
+            answered_at: string;
+            /** @description Whether the best attempt was correct. Sticky: once true it stays true even if a later re-practice is wrong. Same nullability as QuizAnswer.is_correct for schema consistency; non-null whenever this object is present. */
+            is_correct: boolean | null;
+            /**
+             * @description Type discriminant. Always quiz_answer_best.
+             * @constant
+             */
+            object: "quiz_answer_best";
+            /** @description What the best attempt submitted. */
             submission: components["schemas"]["QuizSubmission"] | null;
         };
         QuizAnswerResult: {
-            /** @description The row just written. Never null here; nullable because the detail's viewer.answer is. */
+            /** @description The row after this request. Never null here; nullable because the detail's viewer.answer is. */
             answer: components["schemas"]["QuizAnswer"] | null;
+            /** @description True for the caller's first attempt on this quiz (201 Created); false for a re-practice that overwrote the latest attempt (200 OK). Public counts, the answer roster and the author notification move only when this is true. */
+            is_first_attempt: boolean;
             /**
              * @description Type discriminant. Always quiz_answer_result.
              * @constant
@@ -11250,7 +11275,9 @@ export interface components {
         QuizSummaryViewer: {
             /** @description Whether the caller has an answerer row. The author's author row does not count. */
             has_answered: boolean;
-            /** @description Whether the caller was correct. null when they have not answered. */
+            /** @description Whether any attempt was ever correct. Sticky; this drives the wrong-set marker. null when they have not answered. */
+            has_correct_attempt: boolean | null;
+            /** @description Whether the latest attempt was correct. null when they have not answered. */
             is_correct: boolean | null;
         };
         /** @enum {string} */
@@ -33409,6 +33436,16 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Re-practice accepted: the caller's latest attempt replaced the previous one. The body is the same as 201, with is_first_attempt false; public counts and the author notification did not move. */
+            200: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizAnswerResult"];
+                };
+            };
             /** @description Created */
             201: {
                 headers: {
@@ -33455,7 +33492,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description ALREADY_EXISTS, IDEMPOTENCY_KEY_REUSED or IDEMPOTENCY_REQUEST_IN_PROGRESS. */
+            /** @description IDEMPOTENCY_KEY_REUSED or IDEMPOTENCY_REQUEST_IN_PROGRESS. */
             409: {
                 headers: {
                     [name: string]: unknown;

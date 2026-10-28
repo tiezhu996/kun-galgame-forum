@@ -31,7 +31,7 @@ const correctRate = (q: QuizSummary) =>
     >
       <div class="flex w-6 shrink-0 justify-center text-lg">
         <KunIcon
-          v-if="quiz.viewer?.is_correct === true"
+          v-if="quiz.viewer?.has_correct_attempt === true"
           name="lucide:circle-check"
           class="text-success"
         />

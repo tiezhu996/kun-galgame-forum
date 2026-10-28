@@ -205,7 +205,8 @@ func (w *purgeWorld) populate(t *testing.T) {
 	s.insert("galgame_quiz_galgame", map[string]any{"quiz_id": quizT["id"], "work_id": pwGalgame})
 	s.insert("galgame_quiz_answer", map[string]any{"quiz_id": quizT["id"], "user_id": pwOther, "role": "answerer", "quality_rating": 5, "created": at, "updated": at})
 	quizO := quiz(pwOther)
-	s.insert("galgame_quiz_answer", map[string]any{"quiz_id": quizO["id"], "user_id": pwTarget, "role": "answerer", "is_correct": true, "quality_rating": 7, "created": at, "updated": at})
+	s.insert("galgame_quiz_answer", map[string]any{"quiz_id": quizO["id"], "user_id": pwTarget, "role": "answerer", "is_correct": true,
+		"first_is_correct": true, "best_is_correct": true, "quality_rating": 7, "created": at, "updated": at})
 	s.insert("galgame_quiz_favorite", map[string]any{"quiz_id": quizO["id"], "user_id": pwTarget, "created": at})
 	s.run(`UPDATE galgame_quiz SET answer_count = 1, correct_count = 1, quality_sum = 7, quality_count = 1, favorite_count = 1 WHERE id = ?`, quizO["id"])
 	s.run(`UPDATE galgame_quiz SET answer_count = 1, quality_sum = 5, quality_count = 1 WHERE id = ?`, quizT["id"])

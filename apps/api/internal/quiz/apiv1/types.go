@@ -98,13 +98,22 @@ type QuizSource struct {
 }
 
 type QuizAnswer struct {
-	Object     string          `json:"object" enum:"quiz_answer" maxLength:"11" doc:"Type discriminant. Always quiz_answer."`
-	ID         repr.DecimalID  `json:"id" doc:"Answer row id."`
-	QuizID     repr.DecimalID  `json:"quiz_id" doc:"Id of the quiz."`
-	Answerer   repr.UserRef    `json:"answerer" doc:"User who answered."`
-	Submission *QuizSubmission `json:"submission" doc:"What they submitted. null when the caller may not see the answer key."`
-	IsCorrect  *bool           `json:"is_correct" doc:"Whether they were correct. null when the caller may not see the answer key."`
-	AnsweredAt repr.DateTime   `json:"answered_at" doc:"Time they answered."`
+	Object         string          `json:"object" enum:"quiz_answer" maxLength:"11" doc:"Type discriminant. Always quiz_answer."`
+	ID             repr.DecimalID  `json:"id" doc:"Answer row id."`
+	QuizID         repr.DecimalID  `json:"quiz_id" doc:"Id of the quiz."`
+	Answerer       repr.UserRef    `json:"answerer" doc:"User who answered."`
+	Submission     *QuizSubmission `json:"submission" doc:"Their latest submission. null when the caller may not see the answer key."`
+	IsCorrect      *bool           `json:"is_correct" doc:"Whether the latest attempt was correct. null when the caller may not see the answer key."`
+	AnsweredAt     repr.DateTime   `json:"answered_at" doc:"Time of their first attempt."`
+	LastAnsweredAt *repr.DateTime  `json:"last_answered_at,omitempty" doc:"Time of the latest attempt. Present only on the caller's own answer."`
+	Best           *QuizAnswerBest `json:"best,omitempty" doc:"Their best attempt. Present only on the caller's own answer."`
+}
+
+type QuizAnswerBest struct {
+	Object     string          `json:"object" enum:"quiz_answer_best" maxLength:"16" doc:"Type discriminant. Always quiz_answer_best."`
+	IsCorrect  *bool           `json:"is_correct" doc:"Whether the best attempt was correct. Sticky: once true it stays true even if a later re-practice is wrong. Same nullability as QuizAnswer.is_correct for schema consistency; non-null whenever this object is present."`
+	Submission *QuizSubmission `json:"submission" doc:"What the best attempt submitted."`
+	AnsweredAt repr.DateTime   `json:"answered_at" doc:"Time of the best attempt."`
 }
 
 type QuizSubmission struct {
@@ -113,9 +122,10 @@ type QuizSubmission struct {
 }
 
 type QuizAnswerResult struct {
-	Object   string        `json:"object" enum:"quiz_answer_result" maxLength:"18" doc:"Type discriminant. Always quiz_answer_result."`
-	Answer   *QuizAnswer   `json:"answer" doc:"The row just written. Never null here; nullable because the detail's viewer.answer is."`
-	Solution *QuizSolution `json:"solution" doc:"The answer key and explanation. Never null here; nullable because the detail's solution is."`
+	Object         string        `json:"object" enum:"quiz_answer_result" maxLength:"18" doc:"Type discriminant. Always quiz_answer_result."`
+	IsFirstAttempt bool          `json:"is_first_attempt" doc:"True for the caller's first attempt on this quiz (201 Created); false for a re-practice that overwrote the latest attempt (200 OK). Public counts, the answer roster and the author notification move only when this is true."`
+	Answer         *QuizAnswer   `json:"answer" doc:"The row after this request. Never null here; nullable because the detail's viewer.answer is."`
+	Solution       *QuizSolution `json:"solution" doc:"The answer key and explanation. Never null here; nullable because the detail's solution is."`
 }
 
 type QuizViewer struct {
@@ -128,8 +138,9 @@ type QuizViewer struct {
 }
 
 type QuizSummaryViewer struct {
-	HasAnswered bool  `json:"has_answered" doc:"Whether the caller has an answerer row. The author's author row does not count."`
-	IsCorrect   *bool `json:"is_correct" doc:"Whether the caller was correct. null when they have not answered."`
+	HasAnswered       bool  `json:"has_answered" doc:"Whether the caller has an answerer row. The author's author row does not count."`
+	IsCorrect         *bool `json:"is_correct" doc:"Whether the latest attempt was correct. null when they have not answered."`
+	HasCorrectAttempt *bool `json:"has_correct_attempt" doc:"Whether any attempt was ever correct. Sticky; this drives the wrong-set marker. null when they have not answered."`
 }
 
 type QuizEngagement struct {
@@ -278,6 +289,7 @@ type createAnswerInput struct {
 }
 
 type createAnswerOutput struct {
+	Status   int    `json:"-"`
 	Location string `header:"Location" format:"uri-reference" maxLength:"64" doc:"Absolute path of the quiz, such as /api/v1/quizzes/12."`
 	Body     QuizAnswerResult
 }

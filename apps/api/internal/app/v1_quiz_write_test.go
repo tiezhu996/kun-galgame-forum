@@ -169,6 +169,47 @@ func TestV1UpdateQuizRegradeBothDirections(t *testing.T) {
 	}
 }
 
+func TestV1UpdateQuizRegradesFirstLatestBest(t *testing.T) {
+	f := newQuizFix(t, nil)
+	// Bob answers the judge quiz right first, then re-practices wrong.
+	resp, got := f.qz(t, http.MethodPost, "/api/v1/quizzes/"+idStr(g2QJudge)+"/answers",
+		"/quizzes/{quiz_id}/answers", "sess-bob", keyUUID(40),
+		map[string]any{"choice_indexes": []int{}, "is_statement_true": true})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("first %d %+v", resp.StatusCode, got)
+	}
+	resp, got = f.qz(t, http.MethodPost, "/api/v1/quizzes/"+idStr(g2QJudge)+"/answers",
+		"/quizzes/{quiz_id}/answers", "sess-bob", keyUUID(41),
+		map[string]any{"choice_indexes": []int{}, "is_statement_true": false})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("repeat %d %+v", resp.StatusCode, got)
+	}
+	// Author flips the judge key from true to false: latest, first and best
+	// snapshots are each regraded under the new key.
+	resp, got = f.qz(t, http.MethodPatch, "/api/v1/quizzes/"+idStr(g2QJudge),
+		"/quizzes/{quiz_id}", "sess-grant", "",
+		map[string]any{"is_statement_true": false})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("regrade %d %+v", resp.StatusCode, got)
+	}
+	row := func(col string) int {
+		return f.scalar(t, `SELECT `+col+`::int FROM galgame_quiz_answer
+			WHERE quiz_id = ? AND user_id = ? AND role = 'answerer'`, g2QJudge, w3UserBob)
+	}
+	if n := row("is_correct"); n != 1 {
+		t.Errorf("latest regrade %d, want true", n)
+	}
+	if n := row("first_is_correct"); n != 0 {
+		t.Errorf("first regrade %d, want false", n)
+	}
+	if n := row("best_is_correct"); n != 0 {
+		t.Errorf("best regrade %d, want false", n)
+	}
+	if n := f.scalar(t, `SELECT correct_count FROM galgame_quiz WHERE id = ?`, g2QJudge); n != 0 {
+		t.Errorf("correct_count after regrade %d, want first-attempt based 0", n)
+	}
+}
+
 func TestV1UpdateQuizPermission(t *testing.T) {
 	f := newQuizFix(t, nil)
 	resp, got := f.qz(t, http.MethodPatch, "/api/v1/quizzes/"+idStr(g2QMain), "/quizzes/{quiz_id}", "sess-bob", "",

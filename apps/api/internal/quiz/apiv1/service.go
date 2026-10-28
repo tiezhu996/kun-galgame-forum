@@ -225,6 +225,8 @@ func (s *Service) summaries(ctx context.Context, rows []model.GalgameQuiz, viewe
 			if ok && va.Role == "answerer" {
 				sv.HasAnswered = true
 				sv.IsCorrect = va.IsCorrect
+				everCorrect := va.BestIsCorrect
+				sv.HasCorrectAttempt = &everCorrect
 			}
 			item.Viewer = sv
 		}
@@ -352,7 +354,7 @@ func (s *Service) detail(ctx context.Context, row *model.GalgameQuiz, users map[
 			if p != nil {
 				return nil, p
 			}
-			item, p := s.answerItem(row.Type, *answer, self, true)
+			item, p := s.answerItem(row.Type, *answer, self, true, true)
 			if p != nil {
 				return nil, p
 			}

@@ -141,27 +141,27 @@ func (f *quizFix) seedQuizzes(t *testing.T) {
 		g2QMain, w3UserAlice, base, base)
 	run(`INSERT INTO galgame_quiz_galgame (quiz_id, work_id) VALUES (?, ?)`, g2QMain, g2WorkSFW)
 
-	run(`INSERT INTO galgame_quiz_answer (id, quiz_id, user_id, role, submitted, is_correct, created, updated)
-		VALUES (?, ?, ?, 'answerer', '{"value":0}'::jsonb, false, ?, ?)`,
-		g2AnsBob, g2QMain, w3UserBob, ansTime, ansTime)
-	run(`INSERT INTO galgame_quiz_answer (id, quiz_id, user_id, role, submitted, is_correct, created, updated)
-		VALUES (?, ?, ?, 'answerer', '{"value":1}'::jsonb, true, ?, ?)`,
-		g2AnsOther, g2QMain, w3UserOther, ansTime, ansTime)
-	run(`INSERT INTO galgame_quiz_answer (id, quiz_id, user_id, role, submitted, is_correct, created, updated)
-		VALUES (?, ?, ?, 'answerer', '{"value":0}'::jsonb, false, ?, ?)`,
-		g2AnsGrant, g2QMain, w3UserGrant, ansTime.Add(time.Second), ansTime)
-	run(`INSERT INTO galgame_quiz_answer (id, quiz_id, user_id, role, submitted, is_correct, created, updated)
-		VALUES (?, ?, ?, 'answerer', '{"value":2}'::jsonb, false, ?, ?)`,
-		g2AnsStaff, g2QMain, w3UserStaff, ansTime.Add(2*time.Second), ansTime)
+	run(`INSERT INTO galgame_quiz_answer (id, quiz_id, user_id, role, submitted, is_correct, first_submitted, first_is_correct, best_submitted, best_is_correct, best_at, created, updated)
+		VALUES (?, ?, ?, 'answerer', '{"value":0}'::jsonb, false, '{"value":0}'::jsonb, false, '{"value":0}'::jsonb, false, ?, ?, ?)`,
+		g2AnsBob, g2QMain, w3UserBob, ansTime, ansTime, ansTime)
+	run(`INSERT INTO galgame_quiz_answer (id, quiz_id, user_id, role, submitted, is_correct, first_submitted, first_is_correct, best_submitted, best_is_correct, best_at, created, updated)
+		VALUES (?, ?, ?, 'answerer', '{"value":1}'::jsonb, true, '{"value":1}'::jsonb, true, '{"value":1}'::jsonb, true, ?, ?, ?)`,
+		g2AnsOther, g2QMain, w3UserOther, ansTime, ansTime, ansTime)
+	run(`INSERT INTO galgame_quiz_answer (id, quiz_id, user_id, role, submitted, is_correct, first_submitted, first_is_correct, best_submitted, best_is_correct, best_at, created, updated)
+		VALUES (?, ?, ?, 'answerer', '{"value":0}'::jsonb, false, '{"value":0}'::jsonb, false, '{"value":0}'::jsonb, false, ?, ?, ?)`,
+		g2AnsGrant, g2QMain, w3UserGrant, ansTime.Add(time.Second), ansTime.Add(time.Second), ansTime)
+	run(`INSERT INTO galgame_quiz_answer (id, quiz_id, user_id, role, submitted, is_correct, first_submitted, first_is_correct, best_submitted, best_is_correct, best_at, created, updated)
+		VALUES (?, ?, ?, 'answerer', '{"value":2}'::jsonb, false, '{"value":2}'::jsonb, false, '{"value":2}'::jsonb, false, ?, ?, ?)`,
+		g2AnsStaff, g2QMain, w3UserStaff, ansTime.Add(2*time.Second), ansTime.Add(2*time.Second), ansTime)
 
 	run(`INSERT INTO galgame_quiz (id, user_id, category, type, difficulty, spoiler_level, question, description, content, explanation, hide_galgame, view, answer_count, correct_count, favorite_count, quality_sum, quality_count, comment_count, status_update_time, created, updated)
 		VALUES (?, ?, 'trivia', 'single', 2, 'none', 'Regrade me', '', ?::jsonb, '', false, 0, 1, 0, 0, 0, 0, 0, ?, ?, ?)`,
 		g2QRegrade, w3UserAlice, single, base, base, base)
 	run(`INSERT INTO galgame_quiz_answer (quiz_id, user_id, role, created, updated) VALUES (?, ?, 'author', ?, ?)`,
 		g2QRegrade, w3UserAlice, base, base)
-	run(`INSERT INTO galgame_quiz_answer (id, quiz_id, user_id, role, submitted, is_correct, created, updated)
-		VALUES (?, ?, ?, 'answerer', '{"value":0}'::jsonb, false, ?, ?)`,
-		g2AnsRegrade, g2QRegrade, w3UserOther, ansTime, ansTime)
+	run(`INSERT INTO galgame_quiz_answer (id, quiz_id, user_id, role, submitted, is_correct, first_submitted, first_is_correct, best_submitted, best_is_correct, best_at, created, updated)
+		VALUES (?, ?, ?, 'answerer', '{"value":0}'::jsonb, false, '{"value":0}'::jsonb, false, '{"value":0}'::jsonb, false, ?, ?, ?)`,
+		g2AnsRegrade, g2QRegrade, w3UserOther, ansTime, ansTime, ansTime)
 
 	run(`INSERT INTO galgame_quiz (id, user_id, category, type, difficulty, spoiler_level, question, description, content, explanation, hide_galgame, view, answer_count, correct_count, favorite_count, quality_sum, quality_count, comment_count, status_update_time, created, updated)
 		VALUES (?, ?, 'plot', 'single', 1, 'none', 'NSFW linked', '', ?::jsonb, '', false, 0, 0, 0, 0, 0, 0, 0, ?, ?, ?)`,

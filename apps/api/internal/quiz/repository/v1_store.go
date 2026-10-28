@@ -12,13 +12,11 @@ import (
 	msgModel "kun-galgame-api/internal/message/model"
 	msgRepo "kun-galgame-api/internal/message/repository"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
 
 var (
-	ErrNotFound      = errors.New("quiz: row not found")
-	ErrAlreadyExists = errors.New("quiz: already exists")
+	ErrNotFound = errors.New("quiz: row not found")
 )
 
 type Store struct {
@@ -37,11 +35,6 @@ func (s *Store) DB() *gorm.DB { return s.db }
 
 func (s *Store) InTx(fn func(tx *gorm.DB) error) error {
 	return s.db.Transaction(fn)
-}
-
-func UniqueViolation(err error) bool {
-	var pg *pgconn.PgError
-	return errors.As(err, &pg) && pg.Code == "23505"
 }
 
 func notFound(err error) error {
@@ -285,13 +278,14 @@ func (s *Store) SetWorks(tx *gorm.DB, quizID int, workIDs []int) error {
 }
 
 type ViewerAnswer struct {
-	QuizID    int
-	Role      string
-	IsCorrect *bool
-	Submitted json.RawMessage
-	Quality   *int
-	CreatedAt time.Time
-	ID        int
+	QuizID        int
+	Role          string
+	IsCorrect     *bool
+	BestIsCorrect bool
+	Submitted     json.RawMessage
+	Quality       *int
+	CreatedAt     time.Time
+	ID            int
 }
 
 func (s *Store) FindAnswer(quizID, userID int) (*model.GalgameQuizAnswer, error) {
@@ -317,19 +311,51 @@ func (s *Store) FindViewerAnswers(quizIDs []int, userID int) (map[int]ViewerAnsw
 	}
 	for _, r := range rows {
 		out[r.QuizID] = ViewerAnswer{
-			QuizID: r.QuizID, Role: r.Role, IsCorrect: r.IsCorrect,
+			QuizID: r.QuizID, Role: r.Role, IsCorrect: r.IsCorrect, BestIsCorrect: r.BestIsCorrect,
 			Submitted: r.Submitted, Quality: r.QualityRating, CreatedAt: r.CreatedAt, ID: r.ID,
 		}
 	}
 	return out, nil
 }
 
-func (s *Store) InsertAnswer(tx *gorm.DB, a *model.GalgameQuizAnswer) error {
-	err := tx.Create(a).Error
-	if UniqueViolation(err) {
-		return ErrAlreadyExists
+// AnswerUpsert is the result of writing one answerer attempt.
+type AnswerUpsert struct {
+	ID        int
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	// Inserted reports whether this created the row (the user's first
+	// attempt). The ON CONFLICT branch returns false, so two racing first
+	// attempts still bump stats and notify the author exactly once.
+	Inserted bool
+}
+
+// UpsertAnswer records an attempt. The first attempt inserts the row and seeds
+// first_* and best_*; repeat attempts overwrite submitted/is_correct and only
+// advance best_* until the first correct one. quality_rating and created are
+// never touched.
+func (s *Store) UpsertAnswer(tx *gorm.DB, quizID, userID int, submitted json.RawMessage, correct bool) (*AnswerUpsert, error) {
+	const q = `
+INSERT INTO galgame_quiz_answer AS a
+    (quiz_id, user_id, role, submitted, is_correct,
+     first_submitted, first_is_correct, best_submitted, best_is_correct, best_at, created, updated)
+VALUES (?, ?, 'answerer', ?::jsonb, ?, ?::jsonb, ?, ?::jsonb, ?, now(), now(), now())
+ON CONFLICT (quiz_id, user_id) DO UPDATE SET
+    submitted = EXCLUDED.submitted,
+    is_correct = EXCLUDED.is_correct,
+    best_submitted = CASE WHEN a.best_is_correct THEN a.best_submitted ELSE EXCLUDED.best_submitted END,
+    best_is_correct = a.best_is_correct OR EXCLUDED.is_correct,
+    best_at = CASE WHEN a.best_is_correct THEN a.best_at ELSE now() END,
+    updated = now()
+RETURNING id, created, updated, (xmax = 0) AS inserted`
+	var res AnswerUpsert
+	err := tx.Raw(q,
+		quizID, userID, string(submitted), correct,
+		string(submitted), correct, string(submitted), correct,
+	).Row().Scan(&res.ID, &res.CreatedAt, &res.UpdatedAt, &res.Inserted)
+	if err != nil {
+		return nil, err
 	}
-	return err
+	return &res, nil
 }
 
 func (s *Store) BumpAnswerStats(tx *gorm.DB, quizID int, correct bool) error {
@@ -380,14 +406,16 @@ func (s *Store) AnswerersForRegrade(tx *gorm.DB, quizID int) ([]model.GalgameQui
 	return rows, err
 }
 
-func (s *Store) SetAnswerCorrect(tx *gorm.DB, answerID int, correct bool) error {
-	return tx.Exec(`UPDATE galgame_quiz_answer SET is_correct = ? WHERE id = ?`, correct, answerID).Error
+func (s *Store) SetAnswerGrades(tx *gorm.DB, answerID int, latestOK, firstOK, bestOK bool) error {
+	return tx.Exec(`UPDATE galgame_quiz_answer
+		SET is_correct = ?, first_is_correct = ?, best_is_correct = ? WHERE id = ?`,
+		latestOK, firstOK, bestOK, answerID).Error
 }
 
 func (s *Store) RecountCorrect(tx *gorm.DB, quizID int) error {
 	return tx.Exec(`UPDATE galgame_quiz SET correct_count = (
 		SELECT COUNT(*) FROM galgame_quiz_answer
-		WHERE quiz_id = ? AND role = 'answerer' AND is_correct
+		WHERE quiz_id = ? AND role = 'answerer' AND first_is_correct
 	) WHERE id = ?`, quizID, quizID).Error
 }
 

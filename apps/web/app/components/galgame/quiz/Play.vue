@@ -50,6 +50,13 @@ const answerRef = ref<{
   validate: () => string | null
 } | null>(null)
 const isSubmitting = ref(false)
+const practicing = ref(false)
+const answerAttempt = ref(0)
+
+const startPractice = () => {
+  practicing.value = true
+  answerAttempt.value++
+}
 
 const applyQuality = (r: QuizQuality) => {
   state.value = {
@@ -107,6 +114,7 @@ const submitAnswer = async () => {
   if (!res.ok) {
     reportProblem(res.problem)
     if (res.problem.code === 'ALREADY_EXISTS') {
+      practicing.value = false
       await reloadQuiz()
       emit('answered')
     }
@@ -114,13 +122,16 @@ const submitAnswer = async () => {
   }
   answerKey.clear()
   const posted = res.data
+  practicing.value = false
   if (posted.answer && posted.solution) {
     state.value = {
       ...state.value,
       solution: posted.solution,
-      answer_count: state.value.answer_count + 1,
+      answer_count:
+        state.value.answer_count + (posted.is_first_attempt ? 1 : 0),
       correct_count:
-        state.value.correct_count + (posted.answer.is_correct ? 1 : 0),
+        state.value.correct_count +
+        (posted.is_first_attempt && posted.answer.is_correct ? 1 : 0),
       viewer: state.value.viewer
         ? {
             ...state.value.viewer,
@@ -130,7 +141,7 @@ const submitAnswer = async () => {
         : state.value.viewer
     }
   }
-  if (state.value.is_work_hidden) {
+  if (posted.is_first_attempt && state.value.is_work_hidden) {
     await reloadQuiz()
   }
   emit('answered')
@@ -143,9 +154,11 @@ const canManage = computed(() => canEdit.value || canDelete.value)
 const author = computed(() => toKunUser(state.value.author))
 const hasDescription = computed(() => documentHasContent(state.value.content))
 const showAnswerInput = computed(
-  () => !state.value.viewer?.has_answered && !state.value.solution
+  () => practicing.value || (!state.value.viewer?.has_answered && !state.value.solution)
 )
-const showResult = computed(() => !!state.value.solution)
+const showResult = computed(
+  () => !practicing.value && !!state.value.solution
+)
 
 const showEdit = ref(false)
 const editSource = ref<QuizSource | null>(null)
@@ -350,13 +363,14 @@ const correctRate = computed(() =>
 
         <div v-if="showAnswerInput" class="space-y-4">
           <GalgameQuizPlayAnswerInput
+            :key="`answer-input-${answerAttempt}`"
             ref="answerRef"
             :type="state.quiz_type"
             :choices="state.choices"
           />
           <div class="flex justify-end">
             <KunButton :loading="isSubmitting" @click="submitAnswer">
-              提交答案
+              {{ practicing ? '提交本次练习' : '提交答案' }}
             </KunButton>
           </div>
         </div>
@@ -367,6 +381,7 @@ const correctRate = computed(() =>
           :answer="state.viewer?.answer ?? null"
           :solution="state.solution"
           @rated="applyQuality"
+          @practice="startPractice"
         />
 
         <KunDivider />

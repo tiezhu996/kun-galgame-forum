@@ -15,9 +15,21 @@ const props = defineProps<{
   solution: QuizSolution
 }>()
 
-const emits = defineEmits<{ rated: [result: QuizQuality] }>()
+const emits = defineEmits<{
+  rated: [result: QuizQuality]
+  practice: []
+}>()
 
 const api = useApiClient()
+
+const practicedBefore = computed(
+  () =>
+    props.answer?.last_answered_at !== undefined &&
+    props.answer?.answered_at !== props.answer?.last_answered_at
+)
+const masteredBefore = computed(
+  () => props.answer?.is_correct === false && props.answer?.best?.is_correct === true
+)
 
 const optionRows = computed(() => {
   if (props.quiz.quiz_type !== 'single' && props.quiz.quiz_type !== 'multiple') {
@@ -103,6 +115,23 @@ const submitQuality = async () => {
       icon="lucide:book-open"
       title="本题答案"
     />
+    <KunInfo
+      v-if="masteredBefore"
+      color="warning"
+      icon="lucide:trophy"
+      title="本次答错, 但你曾答对过这道题"
+    />
+    <div v-if="answer" class="flex items-center justify-between gap-2">
+      <span v-if="practicedBefore" class="text-default-400 text-xs">
+        最近练习: <KunTime :time="answer.last_answered_at ?? answer.answered_at" />
+      </span>
+      <span v-else />
+      <KunButton size="sm" variant="flat" @click="emits('practice')">
+        <span class="flex items-center gap-1">
+          <KunIcon name="lucide:rotate-ccw" />再练一次
+        </span>
+      </KunButton>
+    </div>
 
     <div v-if="optionRows.length" class="space-y-2">
       <div

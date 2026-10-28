@@ -53,7 +53,10 @@ const {
 )
 
 watch(
-  () => props.quiz.answer_count,
+  () => [
+    props.quiz.answer_count,
+    props.quiz.viewer?.answer?.last_answered_at
+  ],
   () => {
     refresh()
   }
